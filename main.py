@@ -10,7 +10,7 @@ from datetime import datetime
 import random
 import itertools
 
-CUDA_VISIBLE_DEVICES='1'
+CUDA_VISIBLE_DEVICES='0'
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA_VISIBLE_DEVICES
 
 def seed_torch(seed=0):
@@ -137,8 +137,10 @@ def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
 		# print(iteration, ori_data.shape, A.shape)
 		# ori_data: (N, C, T, V)
 		# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
+		if (iteration>58) : 
+			return
 		data, no_norm_loc_data, object_type = preprocess_data(ori_data, rescale_xy)
-		for now_history_frames in range(1, data.shape[-2]):
+		for now_history_frames in range(6, 7):
 			input_data = data[:,:,:now_history_frames,:] # (N, C, T, V)=(N, 4, 6, 120)
 			output_loc_GT = data[:,:2,now_history_frames:,:] # (N, C, T, V)=(N, 2, 6, 120)
 			output_mask = data[:,-1:,now_history_frames:,:] # (N, C, T, V)=(N, 1, 6, 120)
@@ -324,7 +326,7 @@ def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):
 	loader_test = data_loader(pra_testdata_path, pra_batch_size=batch_size_train, pra_shuffle=True, pra_drop_last=True, train_val_test='all')
 
 	# evaluate on testing data (observe 5 frame and predict 1 frame)
-	loader_val = data_loader(pra_traindata_path, pra_batch_size=batch_size_val, pra_shuffle=False, pra_drop_last=False, train_val_test='val') 
+	loader_val = data_loader(pra_traindata_path, pra_batch_size=batch_size_val, pra_shuffle=False, pra_drop_last=True, train_val_test='val') 
 	
 	optimizer = optim.Adam(
 		[{'params':model.parameters()},],) # lr = 0.0001)
@@ -356,10 +358,10 @@ if __name__ == '__main__':
 	model.to(dev)
 
 	# train and evaluate model
+	pretrained_model_path = './trained_models/model_epoch_0048.pt'
+	model = my_load_model(model, pretrained_model_path)
 	run_trainval(model, pra_traindata_path='./train_data.pkl', pra_testdata_path='./test_data.pkl')
 	
-	# pretrained_model_path = './trained_models/model_epoch_0016.pt'
-	# model = my_load_model(model, pretrained_model_path)
 	# run_test(model, './test_data.pkl')
 	
 		

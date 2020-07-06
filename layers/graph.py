@@ -17,19 +17,19 @@ class Graph():
 
 	def get_adjacency(self, A):
 		# compute hop steps
-		self.hop_dis = np.zeros((self.num_node, self.num_node)) + np.inf
-		transfer_mat = [np.linalg.matrix_power(A, d) for d in range(self.max_hop + 1)]
-		# np.stack() : Convert list to array
-		arrive_mat = (np.stack(transfer_mat) > 0)
-		# Hop distance is the distance adjacency matix in terms of no of nodes in between
-		for d in range(self.max_hop, -1, -1):
-			self.hop_dis[arrive_mat[d]] = d
+		# self.hop_dis = np.zeros((self.num_node, self.num_node)) + np.inf
+		# transfer_mat = [np.linalg.matrix_power(A, d) for d in range(self.max_hop + 1)]
+		# # np.stack() : Convert list to array
+		# arrive_mat = (np.stack(transfer_mat) > 0)
+		# # Hop distance is the distance adjacency matix in terms of no of nodes in between
+		# for d in range(self.max_hop, -1, -1):
+		# 	self.hop_dis[arrive_mat[d]] = d
 
-		# compute adjacency
-		valid_hop = range(0, self.max_hop + 1)
-		adjacency = np.zeros((self.num_node, self.num_node))
-		for hop in valid_hop:
-			adjacency[self.hop_dis == hop] = 1
+		# # compute adjacency
+		# valid_hop = range(0, self.max_hop + 1)
+		# adjacency = np.zeros((self.num_node, self.num_node))
+		# for hop in valid_hop:
+		# 	adjacency[self.hop_dis == hop] = 1
 		return adjacency
 
 	def normalize_adjacency(self, A):

@@ -62,27 +62,27 @@ class Feeder(torch.utils.data.Dataset):
 		now_mean_xy = self.all_mean_xy[idx].copy() # (2,) = (x, y) 
 
 		# Create more data by rotating x and y coordinates of all the vehicles at all time steps by a random amount 
-		if self.train_val_test.lower() == 'train' and np.random.random()>0.5:
-			angle = 2 * np.pi * np.random.random()
-			sin_angle = np.sin(angle)
-			cos_angle = np.cos(angle)
+		#if self.train_val_test.lower() == 'train' and np.random.random()>0.5:
+		#	angle = 2 * np.pi * np.random.random()
+		#	sin_angle = np.sin(angle)
+		#	cos_angle = np.cos(angle)
 
-			angle_mat = np.array(
-				[[cos_angle, -sin_angle],
-				[sin_angle, cos_angle]])
+		#	angle_mat = np.array(
+		#		[[cos_angle, -sin_angle],
+		#		[sin_angle, cos_angle]])
 
-			xy = now_feature[3:5, :, :]
-			num_xy = np.sum(xy.sum(axis=0).sum(axis=0) != 0) # get the number of valid data
+		#	xy = now_feature[3:5, :, :]
+		#	num_xy = np.sum(xy.sum(axis=0).sum(axis=0) != 0) # get the number of valid data
 
-			# angle_mat: (2, 2), xy: (2, 12, 120)
-			out_xy = np.einsum('ab,btv->atv', angle_mat, xy)
-			now_mean_xy = np.matmul(angle_mat, now_mean_xy)
-			xy[:,:,:num_xy] = out_xy[:,:,:num_xy]
+			# # angle_mat: (2, 2), xy: (2, 12, 120)
+			# out_xy = np.einsum('ab,btv->atv', angle_mat, xy)
+			# now_mean_xy = np.matmul(angle_mat, now_mean_xy)
+			# xy[:,:,:num_xy] = out_xy[:,:,:num_xy]
 
-			now_feature[3:5, :, :] = xy
+			# now_feature[3:5, :, :] = xy
 
 		now_adjacency = self.graph.get_adjacency(self.all_adjacency[idx])
-		now_A = self.graph.normalize_adjacency(now_adjacency)
+		#now_A = self.graph.normalize_adjacency(now_adjacency)
 		
-		return now_feature, now_A, now_mean_xy
+		return now_feature, now_adjacency, now_mean_xy
 
