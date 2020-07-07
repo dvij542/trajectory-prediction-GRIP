@@ -84,7 +84,7 @@ class Feeder(torch.utils.data.Dataset):
 
 			now_feature[3:5, :, :] = xy
 
-		now_adjacency, dist_mats = self.graph.get_adjacency(self.all_adjacency[idx])
+		now_adjacency = self.graph.get_adjacency(self.all_adjacency[idx])
 		now_A = self.graph.normalize_adjacency(now_adjacency)
 		
 		return now_feature, now_A, now_mean_xy
