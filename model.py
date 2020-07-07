@@ -13,7 +13,7 @@ class Model(nn.Module):
 		super().__init__()
 
 		# load graph
-		self.graph = Graph(**graph_args)
+		self.graph = Graph(**graph_args) ##d why **
 		# Initialise Adjacency Matrix
 		A = np.ones((graph_args['max_hop']+1, graph_args['num_node'], graph_args['num_node']))
 
@@ -23,6 +23,7 @@ class Model(nn.Module):
 		kernel_size = (temporal_kernel_size, spatial_kernel_size)
 
 		# best
+		##d meaning???
 		self.st_gcn_networks = nn.ModuleList((
 			nn.BatchNorm2d(in_channels),
 			Graph_Conv_Block(in_channels, 64, kernel_size, 1, residual=True, **kwargs),

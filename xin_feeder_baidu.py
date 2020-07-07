@@ -51,6 +51,9 @@ class Feeder(torch.utils.data.Dataset):
 		with open(self.data_path, 'rb') as reader:
 			# Training (N, C, T, V)=(5010, 11, 12, 120), (5010, 120, 120), (5010, 2)
 			[self.all_feature, self.all_adjacency, self.all_mean_xy]= pickle.load(reader)
+			##all features
+			##all adjacency
+			## all mean xy
 			
 
 	def __len__(self):
@@ -81,7 +84,7 @@ class Feeder(torch.utils.data.Dataset):
 
 			now_feature[3:5, :, :] = xy
 
-		now_adjacency = self.graph.get_adjacency(self.all_adjacency[idx])
+		now_adjacency, dist_mats = self.graph.get_adjacency(self.all_adjacency[idx])
 		now_A = self.graph.normalize_adjacency(now_adjacency)
 		
 		return now_feature, now_A, now_mean_xy

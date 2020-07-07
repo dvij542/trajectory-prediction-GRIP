@@ -93,12 +93,13 @@ def data_loader(pra_path, pra_batch_size=128, pra_shuffle=False, pra_drop_last=F
 def preprocess_data(pra_data, pra_rescale_xy):
 	# pra_data: (N, C, T, V)
 	# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]	
-	feature_id = [3, 4, 9, 10]
+	feature_id = [3, 4, 9, 10] ##d ??
 	ori_data = pra_data[:,feature_id].detach()
 	data = ori_data.detach().clone()
 
-	new_mask = (data[:, :2, 1:]!=0) * (data[:, :2, :-1]!=0) 
+	new_mask = (data[:, :2, 1:]!=0) * (data[:, :2, :-1]!=0) ##d  meaning??
 	# data contains velocity
+	rel_xy = data[:,:2]
 	data[:, :2, 1:] = (data[:, :2, 1:] - data[:, :2, :-1]).float() * new_mask.float()
 	data[:, :2, 0] = 0	
 
@@ -106,11 +107,15 @@ def preprocess_data(pra_data, pra_rescale_xy):
 	object_type = pra_data[:,2:3]
 
 	data = data.float().to(dev)
+	rel_xy = rel_xy.float().to(dev)
+	sum_arr = torch.sum(rel_xy,dim=3)
+	sum_arr = sum_arr/rel_xy.shape[3]
+	rel_xy = rel_xy[:,:,:-1:] - sum_arr
 	ori_data = ori_data.float().to(dev)
 	object_type = object_type.to(dev) #type
 	data[:,:2] = data[:,:2] / pra_rescale_xy
 
-	return data, ori_data, object_type # data contains velocity, ori_data contains position and object_type contains type of the object
+	return data, ori_data, object_type , rel_xy # data contains velocity, ori_data contains position and object_type contains type of the object
 	
 
 def compute_RMSE(pra_pred, pra_GT, pra_mask, pra_error_order=2):
@@ -137,12 +142,13 @@ def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
 		# print(iteration, ori_data.shape, A.shape)
 		# ori_data: (N, C, T, V)
 		# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
-		data, no_norm_loc_data, object_type = preprocess_data(ori_data, rescale_xy)
+		data, no_norm_loc_data, object_type,rel_mat = preprocess_data(ori_data, rescale_xy)
 		for now_history_frames in range(1, data.shape[-2]):
 			input_data = data[:,:,:now_history_frames,:] # (N, C, T, V)=(N, 4, 6, 120)
+			
 			output_loc_GT = data[:,:2,now_history_frames:,:] # (N, C, T, V)=(N, 2, 6, 120)
 			output_mask = data[:,-1:,now_history_frames:,:] # (N, C, T, V)=(N, 1, 6, 120)
-			
+			input_data = torch.cat(input_data,rel_mat,dim=1)
 			A = A.float().to(dev)
 		
 			predicted = pra_model(pra_x=input_data, pra_A=A, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
@@ -152,6 +158,7 @@ def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
 			########################################################
 			# We use abs to compute loss to backward update weights
 			# (N, T), (N, T)
+			##d what does output_mask represent
 			overall_sum_time, overall_num, _ = compute_RMSE(predicted, output_loc_GT, output_mask, pra_error_order=1)
 			# overall_loss
 			total_loss = torch.sum(overall_sum_time) / torch.max(torch.sum(overall_num), torch.ones(1,).to(dev)) #(1,)
@@ -332,8 +339,8 @@ def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):
 	for now_epoch in range(total_epoch):
 		all_loader_train = itertools.chain(loader_train, loader_test)
 		
-		my_print('#######################################Train')
-		train_model(pra_model, all_loader_train, pra_optimizer=optimizer, pra_epoch_log='Epoch:{:>4}/{:>4}'.format(now_epoch, total_epoch))
+		my_print('#######################################Train') ##what is {:>4}/....
+ 		train_model(pra_model, all_loader_train, pra_optimizer=optimizer, pra_epoch_log='Epoch:{:>4}/{:>4}'.format(now_epoch, total_epoch))
 		
 		my_save_model(pra_model, now_epoch)
 
@@ -351,8 +358,8 @@ def run_test(pra_model, pra_data_path):
 
 
 if __name__ == '__main__':
-	graph_args={'max_hop':2, 'num_node':120}
-	model = Model(in_channels=4, graph_args=graph_args, edge_importance_weighting=True)
+	graph_args={'max_hop':2, 'num_node':120} ##max_hop??
+	model = Model(in_channels=4, graph_args=graph_args, edge_importance_weighting=True) ##in_channels?
 	model.to(dev)
 
 	# train and evaluate model
