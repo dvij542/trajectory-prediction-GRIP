@@ -65,7 +65,7 @@ class Model(nn.Module):
 		now_feat = now_feat.permute(0, 3, 2, 1).contiguous() # (N, C, T, V)
 		return now_feat
 
-	def forward(self, pra_x, pra_A, pra_pred_length, pra_teacher_forcing_ratio=0, pra_teacher_location=None):
+	def forward(self, pra_x, pra_A, human_mask, nonhuman_mask, pra_pred_length, pra_teacher_forcing_ratio=0, pra_teacher_location=None):
 		x = pra_x
 		
 		# forward
@@ -73,7 +73,7 @@ class Model(nn.Module):
 			if type(gcn) is nn.BatchNorm2d:
 				x = gcn(x)
 			else:
-				x, _ = gcn(x, pra_A)
+				x, _ = gcn(x, pra_A,human_mask,nonhuman_mask)
 				
 		# prepare for seq2seq lstm model
 		# graph_conv_feature.shape = (N*V,T,C)

@@ -86,7 +86,7 @@ def data_loader(pra_path, pra_batch_size=128, pra_shuffle=False, pra_drop_last=F
 		batch_size=pra_batch_size,
 		shuffle=pra_shuffle,
 		drop_last=pra_drop_last, 
-		num_workers=10,
+		num_workers=0,
 		)
 	return loader
 	
@@ -144,10 +144,14 @@ def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
 			input_data = data[:,:,:now_history_frames,:] # (N, C, T, V)=(N, 4, 6, 120)
 			output_loc_GT = data[:,:2,now_history_frames:,:] # (N, C, T, V)=(N, 2, 6, 120)
 			output_mask = data[:,-1:,now_history_frames:,:] # (N, C, T, V)=(N, 1, 6, 120)
-			
+			cat_mask = ori_data[:,2:3, now_history_frames:, :] # (N, C, T, V)=(N, 1, 6, 120)
+			human_mask = (cat_mask==3).float().to(dev)
+			human_mask = output_mask * human_mask
+			nonhuman_mask = ((cat_mask==1)+(cat_mask==2)+(cat_mask==4)>0).float().to(dev)			
+			nonhuman_mask = output_mask * nonhuman_mask
 			A = A.float().to(dev)
 		
-			predicted = pra_model(pra_x=input_data, pra_A=A, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
+			predicted = pra_model(pra_x=input_data, pra_A=A, human_mask, nonhuman_mask, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
 			
 			########################################################
 			# Compute loss for training
@@ -198,9 +202,14 @@ def val_model(pra_model, pra_data_loader):
 
 			# for category
 			cat_mask = ori_data[:,2:3, now_history_frames:, :] # (N, C, T, V)=(N, 1, 6, 120)
+			### human dist
+			human_mask = (cat_mask==3).float().to(dev)
+			human_mask = output_mask * human_mask
+			nonhuman_mask = ((cat_mask==1)+(cat_mask==2)+(cat_mask==4)>0).float().to(dev)			
+			nonhuman_mask = output_mask * nonhuman_mask
 			
 			A = A.float().to(dev)
-			predicted = pra_model(pra_x=input_data, pra_A=A, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
+			predicted = pra_model(pra_x=input_data, pra_A=A, human_mask=human_mask,nonhuman_mask=nonhuman_mask, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
 			########################################################
 			# Compute details for training
 			########################################################
@@ -231,9 +240,6 @@ def val_model(pra_model, pra_data_loader):
 			car_x2y2 = car_x2y2.sum(axis=-1)
 			all_car_sum_list.extend(car_x2y2)
 
-			### human dist
-			human_mask = (cat_mask==3).float().to(dev)
-			human_mask = output_mask * human_mask
 			human_sum_time, human_num, human_x2y2 = compute_RMSE(predicted, ori_output_loc_GT, human_mask)		
 			all_human_num_list.extend(human_num.detach().cpu().numpy())
 			# x2y2 (N, 6, 39)
@@ -323,7 +329,7 @@ def test_model(pra_model, pra_data_loader):
 
 def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):
 	loader_train = data_loader(pra_traindata_path, pra_batch_size=batch_size_train, pra_shuffle=True, pra_drop_last=True, train_val_test='train')
-	loader_test = data_loader(pra_testdata_path, pra_batch_size=batch_size_train, pra_shuffle=True, pra_drop_last=True, train_val_test='all')
+	#loader_test = data_loader(pra_testdata_path, pra_batch_size=batch_size_train, pra_shuffle=True, pra_drop_last=True, train_val_test='all')
 
 	# evaluate on testing data (observe 5 frame and predict 1 frame)
 	loader_val = data_loader(pra_traindata_path, pra_batch_size=batch_size_val, pra_shuffle=False, pra_drop_last=True, train_val_test='val') 
@@ -332,7 +338,7 @@ def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):
 		[{'params':model.parameters()},],) # lr = 0.0001)
 		
 	for now_epoch in range(total_epoch):
-		all_loader_train = itertools.chain(loader_train, loader_test)
+		all_loader_train = loader_train
 		
 		my_print('#######################################Train')
 		train_model(pra_model, all_loader_train, pra_optimizer=optimizer, pra_epoch_log='Epoch:{:>4}/{:>4}'.format(now_epoch, total_epoch))

@@ -46,9 +46,9 @@ class Graph_Conv_Block(nn.Module):
 			)
 		self.relu = nn.ReLU(inplace=False)
 
-	def forward(self, x, A):
+	def forward(self, x, A,human_mask,nonhuman_mask):
 		res = self.residual(x)
-		x, A = self.gcn(x, A)
+		x, A = self.gcn(x, A,human_mask,nonhuman_mask)
 		x = self.tcn(x) + res
 		return self.relu(x), A
 
