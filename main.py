@@ -99,6 +99,7 @@ def preprocess_data(pra_data, pra_rescale_xy):
 
 	new_mask = (data[:, :2, 1:]!=0) * (data[:, :2, :-1]!=0) 
 	# data contains velocity
+	rel_xy = data[:,:2,:,:].detach().clone()
 	data[:, :2, 1:] = (data[:, :2, 1:] - data[:, :2, :-1]).float() * new_mask.float()
 	data[:, :2, 0] = 0	
 
@@ -106,11 +107,16 @@ def preprocess_data(pra_data, pra_rescale_xy):
 	object_type = pra_data[:,2:3]
 
 	data = data.float().to(dev)
+	rel_xy = rel_xy.float().to(dev)
+	sum_arr = torch.sum(rel_xy,dim=3)
+	sum_arr = sum_arr/rel_xy.shape[3]
+	sum_arr = torch.reshape(sum_arr.contiguous(),(sum_arr.shape[0],2,sum_arr.shape[2],1))
+	rel_xy = rel_xy - sum_arr
 	ori_data = ori_data.float().to(dev)
 	object_type = object_type.to(dev) #type
 	data[:,:2] = data[:,:2] / pra_rescale_xy
 
-	return data, ori_data, object_type # data contains velocity, ori_data contains position and object_type contains type of the object
+	return data, ori_data, object_type, rel_xy # data contains velocity, ori_data contains position and object_type contains type of the object
 	
 
 def compute_RMSE(pra_pred, pra_GT, pra_mask, pra_error_order=2):
@@ -139,9 +145,10 @@ def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
 		# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
 		if (iteration>58) : 
 			return
-		data, no_norm_loc_data, object_type = preprocess_data(ori_data, rescale_xy)
+		data, no_norm_loc_data, object_type, rel_mat = preprocess_data(ori_data, rescale_xy)
 		for now_history_frames in range(6, 7):
-			input_data = data[:,:,:now_history_frames,:] # (N, C, T, V)=(N, 4, 6, 120)
+			input_data = data[:,:,:now_history_frames,:]
+			rel_mat1 = rel_mat[:,:,:now_history_frames,:] # (N, C, T, V)=(N, 4, 6, 120)
 			output_loc_GT = data[:,:2,now_history_frames:,:] # (N, C, T, V)=(N, 2, 6, 120)
 			output_mask = data[:,-1:,now_history_frames:,:] # (N, C, T, V)=(N, 1, 6, 120)
 			cat_mask = ori_data[:,2:3, now_history_frames:, :] # (N, C, T, V)=(N, 1, 6, 120)
@@ -149,9 +156,10 @@ def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
 			human_mask = output_mask * human_mask
 			nonhuman_mask = ((cat_mask==1)+(cat_mask==2)+(cat_mask==4)>0).float().to(dev)			
 			nonhuman_mask = output_mask * nonhuman_mask
+			input_data1 = torch.cat((input_data,rel_mat1),dim=1)
 			A = A.float().to(dev)
 		
-			predicted = pra_model(pra_x=input_data, pra_A=A, human_mask, nonhuman_mask, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
+			predicted = pra_model(pra_x=input_data1, pra_A=A, human_mask, nonhuman_mask, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
 			
 			########################################################
 			# Compute loss for training
@@ -190,10 +198,12 @@ def val_model(pra_model, pra_data_loader):
 	for iteration, (ori_data, A, _) in enumerate(pra_data_loader):
 		# data: (N, C, T, V)
 		# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
-		data, no_norm_loc_data, _ = preprocess_data(ori_data, rescale_xy)
+		data, no_norm_loc_data, _, mat_xy = preprocess_data(ori_data, rescale_xy)
 
-		for now_history_frames in range(6, 7):
+		for now_history_frames in range(4, min(data.shape[-2],9)):
 			input_data = data[:,:,:now_history_frames,:] # (N, C, T, V)=(N, 4, 6, 120)
+			mat_xy1 = mat_xy[:,:,:now_history_frames,:]
+			input_data1 = torch.cat((input_data,mat_xy1),dim = 1)
 			output_loc_GT = data[:,:2,now_history_frames:,:] # (N, C, T, V)=(N, 2, 6, 120)
 			output_mask = data[:,-1:,now_history_frames:,:] # (N, C, T, V)=(N, 1, 6, 120)
 
@@ -209,7 +219,7 @@ def val_model(pra_model, pra_data_loader):
 			nonhuman_mask = output_mask * nonhuman_mask
 			
 			A = A.float().to(dev)
-			predicted = pra_model(pra_x=input_data, pra_A=A, human_mask=human_mask,nonhuman_mask=nonhuman_mask, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
+			predicted = pra_model(pra_x=input_data1, pra_A=A, human_mask=human_mask,nonhuman_mask=nonhuman_mask, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
 			########################################################
 			# Compute details for training
 			########################################################
@@ -360,7 +370,7 @@ def run_test(pra_model, pra_data_path):
 
 if __name__ == '__main__':
 	graph_args={'max_hop':2, 'num_node':120}
-	model = Model(in_channels=4, graph_args=graph_args, edge_importance_weighting=True)
+	model = Model(in_channels=6, graph_args=graph_args, edge_importance_weighting=True)
 	model.to(dev)
 
 	# train and evaluate model
