@@ -10,7 +10,7 @@ from datetime import datetime
 import random
 import itertools
 
-CUDA_VISIBLE_DEVICES='1'
+CUDA_VISIBLE_DEVICES='0'
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA_VISIBLE_DEVICES
 
 def seed_torch(seed=0):
@@ -52,29 +52,21 @@ def my_print(pra_content):
 		print(pra_content)
 		writer.write(pra_content+'\n')
 def my_print_epoch(pra_content):
-	with open(log_file, 'a') as writer:
+	with open(log_file_epoch, 'a') as writer:
 		#print(pra_content)
 		writer.write(pra_content+'\n')
 
 # For dislaying result on screen
 def display_result(pra_results, pra_pref='Train_epoch'):
 	all_overall_sum_list, all_overall_num_list = pra_results
-	overall_sum_time = np.sum(all_overall_sum_list**0.5, axis=0)
+	overall_sum_time = np.sum(all_overall_sum_list, axis=0)
 	overall_num_time = np.sum(all_overall_num_list, axis=0)
 	overall_loss_time = (overall_sum_time / overall_num_time) 
-	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), pra_pref, ' '.join(['{:.3f}'.format(x) for x in list(overall_loss_time) + [np.sum(overall_loss_time)]]))
+	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), pra_pref, ' '.join(['{:.3f}'.format(x) for x in list(overall_loss_time) + [np.sum(overall_loss_time)/6.]]))
+	my_print_epoch(overall_log)
 	my_print(overall_log)
 	return overall_loss_time
 
-def display_result_epoch(pra_results, pra_pref='Train_epoch'):
-	all_overall_sum_list, all_overall_num_list = pra_results
-	overall_sum_time = np.sum(all_overall_sum_list**0.5, axis=0)
-	overall_num_time = np.sum(all_overall_num_list, axis=0)
-	overall_loss_time = (overall_sum_time / overall_num_time) 
-	overall_log_epoch = '|{}|[{}] All_All: {}'.format(datetime.now(), pra_pref, ' '.join(['{:.3f}'.format(x) for x in list(overall_loss_time) + [np.sum(overall_loss_time)]]))
-	#my_print(overall_log)
-	return overall_loss_time
-	
 # To save the model by the name of pra_epoch in work_dir
 def my_save_model(pra_model, pra_epoch):
 	path = '{}/model_epoch_{:04}.pt'.format(work_dir, pra_epoch)
@@ -163,8 +155,10 @@ def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
 		# print(iteration, ori_data.shape, A.shape)
 		# ori_data: (N, C, T, V)
 		# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
+		if(iteration>59):
+			continue
 		data, no_norm_loc_data, object_type = preprocess_data(ori_data, rescale_xy)
-		for now_history_frames in range(1, data.shape[-2]):
+		for now_history_frames in range(4,min(9, data.shape[-2])):
 			input_data = data[:,:,:now_history_frames,:] # (N, C, T, V)=(N, 4, 6, 120)
 			output_loc_GT = data[:,:2,now_history_frames:,:] # (N, C, T, V)=(N, 2, 6, 120)
 			output_mask = data[:,-1:,now_history_frames:,:] # (N, C, T, V)=(N, 1, 6, 120)
@@ -279,11 +273,12 @@ def val_model(pra_model, pra_data_loader):
 	result_car = display_result([np.array(all_car_sum_list), np.array(all_car_num_list)], pra_pref='car')
 	result_human = display_result([np.array(all_human_sum_list), np.array(all_human_num_list)], pra_pref='human')
 	result_bike = display_result([np.array(all_bike_sum_list), np.array(all_bike_num_list)], pra_pref='bike')
-
-	result = (result_car + result_human + result_bike)
+	
+	result = (0.2*result_car + 0.58*result_human + 0.22*result_bike)
 	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), 'WS', ' '.join(['{:.3f}'.format(x) for x in list(result) + [np.sum(result)]]))
 	my_print(overall_log)
-
+	overall_log_epoch = '|{}|[{}] All_All: {}'.format(datetime.now(), 'WS', ' '.join(['{:.3f}'.format(x) for x in list(result) + [np.sum(result)]]))
+	my_print_epoch(overall_log_epoch)
 	all_overall_sum_list = np.array(all_overall_sum_list)
 	all_overall_num_list = np.array(all_overall_num_list)
 	return all_overall_sum_list, all_overall_num_list
@@ -364,15 +359,12 @@ def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):
 		my_save_model(pra_model, now_epoch)
 
 		my_print('#######################################Test')
-		my_print_epoch('#######################################Test ' + now_epoch)
+		my_print_epoch('#######################################Test ' + str(now_epoch))
 		display_result(
 			val_model(pra_model, loader_val),
 			pra_pref='{}_Epoch{}'.format('Test', now_epoch)
 		)
-		display_result_epoch(
-			val_model(pra_model, loader_val),
-			pra_pref='{}_Epoch{}'.format('Test', now_epoch)
-		)
+		
 
 
 def run_test(pra_model, pra_data_path):
