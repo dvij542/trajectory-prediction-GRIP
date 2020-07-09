@@ -15,7 +15,7 @@ class Model(nn.Module):
 		# load graph
 		self.graph = Graph(**graph_args) ##d why **
 		# Initialise Adjacency Matrix
-		A = np.ones((graph_args['max_hop']+1, graph_args['num_node'], graph_args['num_node']))
+		A = np.ones((6, graph_args['num_node'], graph_args['num_node']))
 
 		# build networks
 		spatial_kernel_size = np.shape(A)[0]
@@ -32,13 +32,7 @@ class Model(nn.Module):
 		))
 
 		# initialize parameters for edge importance weighting
-		if edge_importance_weighting:
-			self.edge_importance = nn.ParameterList(
-				[nn.Parameter(torch.ones(np.shape(A))) for i in self.st_gcn_networks]
-				)
-		else:
-			self.edge_importance = [1] * len(self.st_gcn_networks)
-
+	
 		self.num_node = num_node = self.graph.num_node
 		self.out_dim_per_node = out_dim_per_node = 2 #(x, y) coordinate
 		self.seq2seq_car = Seq2Seq(input_size=(64), hidden_size=out_dim_per_node, num_layers=2, dropout=0.5, isCuda=True)
@@ -70,11 +64,11 @@ class Model(nn.Module):
 		x = pra_x
 		
 		# forward
-		for gcn, importance in zip(self.st_gcn_networks, self.edge_importance):
+		for gcn in self.st_gcn_networks:
 			if type(gcn) is nn.BatchNorm2d:
 				x = gcn(x)
 			else:
-				x, _ = gcn(x, pra_A + importance)
+				x, _ = gcn(x, pra_A)
 				
 		# prepare for seq2seq lstm model
 		# graph_conv_feature.shape = (N*V,T,C)

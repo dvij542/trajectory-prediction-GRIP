@@ -1,11 +1,14 @@
+import sys
+sys.path.append('/usr/local/envs/sc-glstm/lib/python3.7/site-packages')
 import numpy as np 
 import glob
 import os 
 from scipy import spatial 
 import pickle
+import itertools
 
 # Please change this to your location
-data_root = '/data/xincoder/ApolloScape/'
+data_root = 'ApolloScape/'
 
 
 history_frames = 6 # 3 second * 2 frame/second
@@ -47,20 +50,37 @@ def get_frame_instance_dict(pra_file_path):
 def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	visible_object_id_list = list(pra_now_dict[pra_observed_last].keys()) # object_id appears at the last observed frame 
 	num_visible_object = len(visible_object_id_list) # number of current observed objects
-
+	#print("yes")
 	# compute the mean values of x and y for zero-centralization. 
 	visible_object_value = np.array(list(pra_now_dict[pra_observed_last].values()))
 	xy = visible_object_value[:, 3:5].astype(float)
+	veh_class = visible_object_value[:,2]
 	mean_xy = np.zeros_like(visible_object_value[0], dtype=float)
 	m_xy = np.mean(xy, axis=0)
 	mean_xy[3:5] = m_xy
 
 	# compute distance between any pair of two objects
 	dist_xy = spatial.distance.cdist(xy, xy)
-	# if their distance is less than $neighbor_distance, we regard them are neighbors.
-	neighbor_matrix = np.zeros((max_num_object, max_num_object))
-	neighbor_matrix[:num_visible_object, :num_visible_object] = (dist_xy<neighbor_distance).astype(int)
+	dist_mask = np.zeros((max_num_object, max_num_object))
+	dist_mask[:num_visible_object, :num_visible_object] = (dist_xy<neighbor_distance).astype(float)
+	# compute relative x and y position matrix
+	relx = np.zeros((max_num_object,max_num_object))
+	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
+		relx[i,j] = xy[i,0] - xy[j,0]
+	rely = np.zeros((max_num_object,max_num_object))
+	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
+		rely[i,j] = xy[i,1] - xy[j,1]
 
+  	# assign person class binary matrix
+	classi = np.zeros((max_num_object,max_num_object))
+	classj = np.zeros((max_num_object,max_num_object))
+	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
+		classi[i,j] = (veh_class[i]==3).astype(float)
+		classj[i,j] = (veh_class[j]==3).astype(float)
+	# Store the distances in a fixed size matrix (neighbour_matrix)
+	neighbor_matrix = np.zeros((max_num_object, max_num_object))
+	neighbor_matrix[:num_visible_object, :num_visible_object] = (dist_xy)
+	
 	now_all_object_id = set([val for x in range(pra_start_ind, pra_end_ind) for val in pra_now_dict[x].keys()])
 	non_visible_object_id_list = list(now_all_object_id - set(visible_object_id_list))
 	num_non_visible_object = len(non_visible_object_id_list)
@@ -86,7 +106,7 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	# np.transpose(object_feature_list, (1,0,2))
 	object_frame_feature[:num_visible_object+num_non_visible_object] = np.transpose(object_feature_list, (1,0,2))
 	
-	return object_frame_feature, neighbor_matrix, m_xy
+	return object_frame_feature, np.array((neighbor_matrix,relx,rely,classi,classj)), m_xy
 	
 
 def generate_train_data(pra_file_path):
@@ -106,6 +126,7 @@ def generate_train_data(pra_file_path):
 	all_adjacency_list = []
 	all_mean_list = []
 	for start_ind in frame_id_set[:-total_frames+1]:
+
 		start_ind = int(start_ind)
 		end_ind = int(start_ind + total_frames)
 		observed_last = start_ind + history_frames - 1
@@ -117,6 +138,7 @@ def generate_train_data(pra_file_path):
 
 	# (N, V, T, C) --> (N, C, T, V)
 	all_feature_list = np.transpose(all_feature_list, (0, 3, 2, 1))
+	
 	all_adjacency_list = np.array(all_adjacency_list)
 	all_mean_list = np.array(all_mean_list)
 	# print(all_feature_list.shape, all_adjacency_list.shape)
@@ -131,7 +153,10 @@ def generate_test_data(pra_file_path):
 	all_adjacency_list = []
 	all_mean_list = []
 	# get all start frame id
+	#print(frame_id_list)
+
 	start_frame_id_list = frame_id_set[::history_frames]
+	#print(start_frame_id_list)
 	for start_ind in start_frame_id_list:
 		start_ind = int(start_ind)
 		end_ind = int(start_ind + history_frames)
@@ -156,6 +181,7 @@ def generate_data(pra_file_path_list, pra_is_train=True):
 	all_adjacency = []
 	all_mean_xy = []
 	for file_path in pra_file_path_list:
+		print(file_path)
 		if pra_is_train:
 			now_data, now_adjacency, now_mean_xy = generate_train_data(file_path)
 		else:
@@ -171,14 +197,16 @@ def generate_data(pra_file_path_list, pra_is_train=True):
 	# Train (N, C, T, V)=(5010, 11, 12, 70), (5010, 70, 70), (5010, 2)
 	# Test (N, C, T, V)=(415, 11, 6, 70), (415, 70, 70), (415, 2)
 	print(np.shape(all_data), np.shape(all_adjacency), np.shape(all_mean_xy))
-
+	x = [all_data, all_adjacency, all_mean_xy]
 	# save training_data and trainjing_adjacency into a file.
 	if pra_is_train:
 		save_path = 'train_data.pkl'
 	else:
 		save_path = 'test_data.pkl'
 	with open(save_path, 'wb') as writer:
-		pickle.dump([all_data, all_adjacency, all_mean_xy], writer)
+		print("yha to aya")
+		pickle.dump(x, writer)
+		print("chala bhi gya kya")
 
 
 if __name__ == '__main__':

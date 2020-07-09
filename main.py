@@ -32,7 +32,7 @@ future_frames = 6 # 3 second * 2 frame/second
 batch_size_train = 64 
 batch_size_val = 32
 batch_size_test = 1
-total_epoch = 50
+total_epoch = 100
 base_lr = 0.01
 lr_decay_epoch = 5
 dev = 'cuda:0' 
@@ -54,7 +54,7 @@ def my_print(pra_content):
 # For dislaying result on screen
 def display_result(pra_results, pra_pref='Train_epoch'):
 	all_overall_sum_list, all_overall_num_list = pra_results
-	overall_sum_time = np.sum(all_overall_sum_list**0.5, axis=0)
+	overall_sum_time = np.sum(all_overall_sum_list, axis=0)
 	overall_num_time = np.sum(all_overall_num_list, axis=0)
 	overall_loss_time = (overall_sum_time / overall_num_time) 
 	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), pra_pref, ' '.join(['{:.3f}'.format(x) for x in list(overall_loss_time) + [np.sum(overall_loss_time)]]))
@@ -86,7 +86,7 @@ def data_loader(pra_path, pra_batch_size=128, pra_shuffle=False, pra_drop_last=F
 		batch_size=pra_batch_size,
 		shuffle=pra_shuffle,
 		drop_last=pra_drop_last, 
-		num_workers=10,
+		num_workers=0,
 		)
 	return loader
 	
@@ -122,11 +122,13 @@ def preprocess_data(pra_data, pra_rescale_xy):
 def compute_RMSE(pra_pred, pra_GT, pra_mask, pra_error_order=2):
 	pred = pra_pred * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
 	GT = pra_GT * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
-	
-	x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1) # x^2+y^2, (N, C, T, V)->(N, T, V)=(N, 6, 120)
+	if pra_error_order ==2 :
+		x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1)**0.5 # x^2+y^2, (N, C, T, V)->(N, T, V)=(N, 6, 120)
+	else :
+		x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1)
 	overall_sum_time = x2y2.sum(dim=-1) # (N, T, V) -> (N, T)=(N, 6)
 	overall_mask = pra_mask.sum(dim=1).sum(dim=-1) # (N, C, T, V) -> (N, T)=(N, 6)
-	overall_num = overall_mask 
+	overall_num = overall_mask
 
 	return overall_sum_time, overall_num, x2y2
 
@@ -143,18 +145,20 @@ def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
 		# print(iteration, ori_data.shape, A.shape)
 		# ori_data: (N, C, T, V)
 		# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
+		if iteration>59 :
+			return
 		data, no_norm_loc_data, object_type,rel_mat = preprocess_data(ori_data, rescale_xy)
-		for now_history_frames in range(1, data.shape[-2]):
+		for now_history_frames in range(4, 9):
 			input_data = data[:,:,:now_history_frames,:] # (N, C, T, V)=(N, 4, 6, 120)
 			rel_mat1 = rel_mat[:,:,:now_history_frames,:]
 			output_loc_GT = data[:,:2,now_history_frames:,:] # (N, C, T, V)=(N, 2, 6, 120)
 			output_mask = data[:,-1:,now_history_frames:,:] # (N, C, T, V)=(N, 1, 6, 120)
 			#print(input_data.shape)
 			#print(rel_mat.shape)
-			input_data = torch.cat((input_data,rel_mat1),dim=1)
+			input_data1 = torch.cat((input_data,rel_mat1),dim=1)
 			A = A.float().to(dev)
 		
-			predicted = pra_model(pra_x=input_data, pra_A=A, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
+			predicted = pra_model(pra_x=input_data1, pra_A=A, pra_pred_length=output_loc_GT.shape[-2], pra_teacher_forcing_ratio=0, pra_teacher_location=output_loc_GT) # (N, C, T, V)=(N, 2, 6, 120)
 			
 			########################################################
 			# Compute loss for training
@@ -196,7 +200,7 @@ def val_model(pra_model, pra_data_loader):
 		# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
 		data, no_norm_loc_data, _ , mat_xy= preprocess_data(ori_data, rescale_xy)
 
-		for now_history_frames in range(6, 7):
+		for now_history_frames in range(6,7):
 			input_data = data[:,:,:now_history_frames,:] # (N, C, T, V)=(N, 4, 6, 120)
 			mat_xy1 = mat_xy[:,:,:now_history_frames,:]
 			input_data1 = torch.cat((input_data,mat_xy1),dim = 1)
@@ -289,15 +293,17 @@ def test_model(pra_model, pra_data_loader):
 		for iteration, (ori_data, A, mean_xy) in enumerate(pra_data_loader):
 			# data: (N, C, T, V)
 			# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
-			data, no_norm_loc_data, _ = preprocess_data(ori_data, rescale_xy)
+			data, no_norm_loc_data, _, mat_xy = preprocess_data(ori_data, rescale_xy)
 			input_data = data[:,:,:history_frames,:] # (N, C, T, V)=(N, 4, 6, 120)
 			output_mask = data[:,-1,-1,:] # (N, V)=(N, 120)
+			mat_xy1 = mat_xy[:,:,:history_frames,:]
+			input_data1 = torch.cat((input_data,mat_xy1),dim = 1)
 			# print(data.shape, A.shape, mean_xy.shape, input_data.shape)
 
 			ori_output_last_loc = no_norm_loc_data[:,:2,history_frames-1:history_frames,:]
 		
 			A = A.float().to(dev)
-			predicted = pra_model(pra_x=input_data, pra_A=A, pra_pred_length=future_frames, pra_teacher_forcing_ratio=0, pra_teacher_location=None) # (N, C, T, V)=(N, 2, 6, 120)
+			predicted = pra_model(pra_x=input_data1, pra_A=A, pra_pred_length=future_frames, pra_teacher_forcing_ratio=0, pra_teacher_location=None) # (N, C, T, V)=(N, 2, 6, 120)
 			predicted = predicted *rescale_xy 
 
 			for ind in range(1, predicted.shape[-2]):
@@ -366,11 +372,11 @@ if __name__ == '__main__':
 	model.to(dev)
 
 	# train and evaluate model
+	pretrained_model_path = '../trained_models/model_epoch_0049.pt'
+	#model = my_load_model(model, pretrained_model_path)
 	run_trainval(model, pra_traindata_path='./train_data.pkl', pra_testdata_path='./test_data.pkl')
 	
-	# pretrained_model_path = './trained_models/model_epoch_0016.pt'
-	# model = my_load_model(model, pretrained_model_path)
-	# run_test(model, './test_data.pkl')
+	run_test(model, './test_data.pkl')
 	
 		
 		

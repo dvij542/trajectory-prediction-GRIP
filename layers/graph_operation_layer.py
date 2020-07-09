@@ -17,21 +17,55 @@ class ConvTemporalGraphical(nn.Module):
         # To increase the no of channels of the graph to out_channels*k
         self.conv = nn.Conv2d(
             in_channels,
-            out_channels * kernel_size,
+            out_channels,
             kernel_size=(t_kernel_size, 1),
             padding=(t_padding, 0),
             stride=(t_stride, 1),
             dilation=(t_dilation, 1),
             bias=bias)
+        self.adjmatder = nn.Sequential(
+            nn.Conv2d(
+                5,
+                16,
+                kernel_size = 1,
+                stride=(1,1)),
+            #nn.BatchNorm2d(16),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(
+                16,
+                32,
+                kernel_size = 1,
+                stride=(1,1)),
+            #nn.BatchNorm2d(16),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(
+                32,
+                64,
+                kernel_size = 1,
+                stride=(1,1)),
+            #nn.BatchNorm2d(16),
+            #nn.BatchNorm2d(16),
+            nn.ReLU(inplace=False)
+            
+        )
+
+        
 
     def forward(self, x, A):
         assert A.size(1) == self.kernel_size
         x = self.conv(x)
+        #print("yes")
+        mask = A[:,5:]
+        A = self.adjmatder(A[:,:5])
+        # A = (n,c,v,v)
         # To increase the no of channels of the graph to out_channels*k
-        n, kc, t, v = x.size()
+        n, c, t, v = x.size()
+        #A = A*mask
+        Dl = ((A.sum(axis=2) + 0.001)**(-1)).float()
+        A = torch.einsum('ncvw,ncw->ncvw',(A,Dl))
         # x is now a 5d tensor with size (N,k,c,t,v)
-        x = x.view(n, self.kernel_size, kc//self.kernel_size, t, v)
+        #x = x.view(n, self.kernel_size, kc//self.kernel_size, t, v)
         # Matrix multiplication followed by addition of all individual kernel matrices
-        x = torch.einsum('nkctv,nkvw->nctw', (x, A))
+        x = torch.einsum('nctv,ncvw->nctw', (x, A))
 
         return x.contiguous(), A
