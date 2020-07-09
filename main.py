@@ -38,6 +38,7 @@ lr_decay_epoch = 5
 dev = 'cuda:0' 
 work_dir = '../trained_models'
 log_file = os.path.join(work_dir,'log_test.txt')
+log_file_epoch = os.path.join(work_dir,'log_test_epoch.txt')
 test_result_file = 'prediction_result.txt'
 
 criterion = torch.nn.SmoothL1Loss()
@@ -50,6 +51,10 @@ def my_print(pra_content):
 	with open(log_file, 'a') as writer:
 		print(pra_content)
 		writer.write(pra_content+'\n')
+def my_print_epoch(pra_content):
+	with open(log_file, 'a') as writer:
+		#print(pra_content)
+		writer.write(pra_content+'\n')
 
 # For dislaying result on screen
 def display_result(pra_results, pra_pref='Train_epoch'):
@@ -59,6 +64,15 @@ def display_result(pra_results, pra_pref='Train_epoch'):
 	overall_loss_time = (overall_sum_time / overall_num_time) 
 	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), pra_pref, ' '.join(['{:.3f}'.format(x) for x in list(overall_loss_time) + [np.sum(overall_loss_time)]]))
 	my_print(overall_log)
+	return overall_loss_time
+
+def display_result_epoch(pra_results, pra_pref='Train_epoch'):
+	all_overall_sum_list, all_overall_num_list = pra_results
+	overall_sum_time = np.sum(all_overall_sum_list**0.5, axis=0)
+	overall_num_time = np.sum(all_overall_num_list, axis=0)
+	overall_loss_time = (overall_sum_time / overall_num_time) 
+	overall_log_epoch = '|{}|[{}] All_All: {}'.format(datetime.now(), pra_pref, ' '.join(['{:.3f}'.format(x) for x in list(overall_loss_time) + [np.sum(overall_loss_time)]]))
+	#my_print(overall_log)
 	return overall_loss_time
 	
 # To save the model by the name of pra_epoch in work_dir
@@ -101,6 +115,7 @@ def preprocess_data(pra_data, pra_rescale_xy):
 	# data contains velocity
 	data[:, :2, 1:] = (data[:, :2, 1:] - data[:, :2, :-1]).float() * new_mask.float()
 	data[:, :2, 0] = 0	
+
 
 	# # small vehicle: 1, big vehicles: 2, pedestrian 3, bicycle: 4, others: 5
 	object_type = pra_data[:,2:3]
@@ -265,7 +280,7 @@ def val_model(pra_model, pra_data_loader):
 	result_human = display_result([np.array(all_human_sum_list), np.array(all_human_num_list)], pra_pref='human')
 	result_bike = display_result([np.array(all_bike_sum_list), np.array(all_bike_num_list)], pra_pref='bike')
 
-	result = 0.20*result_car + 0.58*result_human + 0.22*result_bike
+	result = (result_car + result_human + result_bike)
 	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), 'WS', ' '.join(['{:.3f}'.format(x) for x in list(result) + [np.sum(result)]]))
 	my_print(overall_log)
 
@@ -349,7 +364,12 @@ def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):
 		my_save_model(pra_model, now_epoch)
 
 		my_print('#######################################Test')
+		my_print_epoch('#######################################Test ' + now_epoch)
 		display_result(
+			val_model(pra_model, loader_val),
+			pra_pref='{}_Epoch{}'.format('Test', now_epoch)
+		)
+		display_result_epoch(
 			val_model(pra_model, loader_val),
 			pra_pref='{}_Epoch{}'.format('Test', now_epoch)
 		)
