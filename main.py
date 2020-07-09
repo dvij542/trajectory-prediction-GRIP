@@ -348,7 +348,7 @@ def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):
 	loader_val = data_loader(pra_traindata_path, pra_batch_size=batch_size_val, pra_shuffle=False, pra_drop_last=False, train_val_test='val') 
 	
 	optimizer = optim.Adam(
-		[{'params':model.parameters()},],) # lr = 0.0001)
+		[{'params':pra_model.parameters()},],) # lr = 0.0001)
 		
 	for now_epoch in range(total_epoch):
 		all_loader_train = itertools.chain(loader_train, loader_test)

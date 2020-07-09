@@ -63,7 +63,7 @@ class Feeder(torch.utils.data.Dataset):
 		now_mean_xy = self.all_mean_xy[idx].copy() # (2,) = (x, y) 
 
 		# Create more data by rotating x and y coordinates of all the vehicles at all time steps by a random amount 
-		if self.train_val_test.lower() == 'train' and np.random.random()>0.5:
+		if self.train_val_test.lower() == 'train' and np.random.random()>1:
 			angle = 2 * np.pi * np.random.random()
 			sin_angle = np.sin(angle)
 			cos_angle = np.cos(angle)
@@ -82,8 +82,8 @@ class Feeder(torch.utils.data.Dataset):
 
 			now_feature[3:5, :, :] = xy
 
-		now_adjacency = self.graph.get_adjacency(self.all_adjacency[idx])
-		now_A = self.graph.normalize_adjacency(now_adjacency)
+		#now_adjacency = self.graph.get_adjacency(self.all_adjacency[idx])
+		#now_A = self.graph.normalize_adjacency(now_adjacency)
 		
-		return now_feature, now_A, now_mean_xy
+		return now_feature, self.all_adjacency[idx], now_mean_xy
 
