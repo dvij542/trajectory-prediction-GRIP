@@ -65,19 +65,34 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	dist_mask = np.zeros((max_num_object, max_num_object))
 	dist_mask[:num_visible_object, :num_visible_object] = (dist_xy<neighbor_distance).astype(float)
 	# compute relative x and y position matrix
-	headingi = np.zeros((max_num_object, max_num_object))
-	headingj = np.zeros((max_num_object, max_num_object))
 	
+	rely = np.zeros((max_num_object,max_num_object))
 	relx = np.zeros((max_num_object,max_num_object))
 	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
 		relx[i,j] = xy[i,0] - xy[j,0]
-		headingi[i,j] = heading[i] 
-		headingj[i,j] = heading[j] 
+		rely[i,j] = xy[i,1] - xy[j,1]
+	
+	relxy = np.array((relx,rely))
+		#change to radians
+	angle = heading
+	sin_angle = np.sin(angle)
+	cos_angle = np.cos(angle)
+
+	angle_mat = np.array(
+			[[cos_angle, -sin_angle],
+			[sin_angle, cos_angle]])
+	
+
+	out_relxy = np.einsum('abw,bvw->avw', angle_mat, relxy)
+	
+	relx = out_relxy[0]
+	rely = out_rely[1]
+	now_feature[3:5, :, :] = xy
+
 
 		
-	rely = np.zeros((max_num_object,max_num_object))
-	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
-		rely[i,j] = xy[i,1] - xy[j,1]
+	
+		
 
   	# assign person class binary matrix
 	classi = np.zeros((max_num_object,max_num_object))
@@ -114,7 +129,7 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	# np.transpose(object_feature_list, (1,0,2))
 	object_frame_feature[:num_visible_object+num_non_visible_object] = np.transpose(object_feature_list, (1,0,2))
 	
-	return object_frame_feature, np.array((neighbor_matrix,relx,rely,classi,classj,headingi,headingj,dist_mask)), m_xy
+	return object_frame_feature, np.array((neighbor_matrix,relx,rely,classi,classj,dist_mask)), m_xy
 	
 
 def generate_train_data(pra_file_path):

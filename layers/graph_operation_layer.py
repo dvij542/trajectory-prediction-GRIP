@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class ConvTemporalGraphical(nn.Module):
     def __init__(self,
                  in_channels,
@@ -16,7 +17,7 @@ class ConvTemporalGraphical(nn.Module):
         self.kernel_size = kernel_size
         self.adjmatder = nn.Sequential(
                 nn.Conv2d(
-                    7,
+                    5,
                     16,
                     kernel_size = 1,
                     stride=(1,1)),
@@ -55,10 +56,13 @@ class ConvTemporalGraphical(nn.Module):
     def forward(self, x, A):
         assert A.size(1) == self.kernel_size
         x = self.conv(x)
-        mask = A[:,7]
-        A = self.adjmatder(A[:,:7])
+        mask = A[:,5]
+
+        A = self.adjmatder(A[:,:5])
+        # A is (n,64,v,v)
         A = A*mask
         Dl = ((A.sum(axis=2) + 0.001)**(-1)).float()
+        # Dl is (n,64,v)
         A = torch.einsum('ncvw,ncw->ncvw',(A,Dl))
         
         # To increase the no of channels of the graph to out_channels*k

@@ -15,7 +15,7 @@ class Model(nn.Module):
 		# load graph
 		self.graph = Graph(**graph_args)
 		# Initialise Adjacency Matrix
-		A = np.ones((7, graph_args['num_node'], graph_args['num_node']))
+		A = np.ones((5, graph_args['num_node'], graph_args['num_node']))
 
 		# build networks
 		spatial_kernel_size = np.shape(A)[0]
