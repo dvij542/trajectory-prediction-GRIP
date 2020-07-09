@@ -275,9 +275,9 @@ def val_model(pra_model, pra_data_loader):
 	result_bike = display_result([np.array(all_bike_sum_list), np.array(all_bike_num_list)], pra_pref='bike')
 	
 	result = (0.2*result_car + 0.58*result_human + 0.22*result_bike)
-	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), 'WS', ' '.join(['{:.3f}'.format(x) for x in list(result) + [np.sum(result)]]))
+	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), 'WS', ' '.join(['{:.3f}'.format(x) for x in list(result) + [np.sum(result)/6.]]))
 	my_print(overall_log)
-	overall_log_epoch = '|{}|[{}] All_All: {}'.format(datetime.now(), 'WS', ' '.join(['{:.3f}'.format(x) for x in list(result) + [np.sum(result)]]))
+	overall_log_epoch = '|{}|[{}] All_All: {}'.format(datetime.now(), 'WS', ' '.join(['{:.3f}'.format(x) for x in list(result) + [np.sum(result)/6.]]))
 	my_print_epoch(overall_log_epoch)
 	all_overall_sum_list = np.array(all_overall_sum_list)
 	all_overall_num_list = np.array(all_overall_num_list)
