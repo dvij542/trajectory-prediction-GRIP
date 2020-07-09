@@ -36,7 +36,7 @@ total_epoch = 50
 base_lr = 0.01
 lr_decay_epoch = 5
 dev = 'cuda:0' 
-work_dir = './trained_models'
+work_dir = '../trained_models'
 log_file = os.path.join(work_dir,'log_test.txt')
 test_result_file = 'prediction_result.txt'
 
@@ -112,8 +112,19 @@ def preprocess_data(pra_data, pra_rescale_xy):
 
 	return data, ori_data, object_type # data contains velocity, ori_data contains position and object_type contains type of the object
 	
-
 def compute_RMSE(pra_pred, pra_GT, pra_mask, pra_error_order=2):
+	pred = pra_pred * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
+	GT = pra_GT * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
+	if pra_error_order ==2 :
+		x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1)**0.5 # x^2+y^2, (N, C, T, V)->(N, T, V)=(N, 6, 120)
+	else :
+		x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1)
+	overall_sum_time = x2y2.sum(dim=-1) # (N, T, V) -> (N, T)=(N, 6)
+	overall_mask = pra_mask.sum(dim=1).sum(dim=-1) # (N, C, T, V) -> (N, T)=(N, 6)
+	overall_num = overall_mask
+
+	return overall_sum_time, overall_num, x2y2
+def compute_RMSE_old(pra_pred, pra_GT, pra_mask, pra_error_order=2):
 	pred = pra_pred * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
 	GT = pra_GT * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
 	
@@ -356,7 +367,7 @@ if __name__ == '__main__':
 	model.to(dev)
 
 	# train and evaluate model
-	run_trainval(model, pra_traindata_path='./train_data.pkl', pra_testdata_path='./test_data.pkl')
+	run_trainval(model, pra_traindata_path='../dataset/train_data.pkl', pra_testdata_path='../dataset/test_data.pkl')
 	
 	# pretrained_model_path = './trained_models/model_epoch_0016.pt'
 	# model = my_load_model(model, pretrained_model_path)

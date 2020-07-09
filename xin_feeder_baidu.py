@@ -30,7 +30,8 @@ class Feeder(torch.utils.data.Dataset):
 
 		total_num = len(self.all_feature)
 		# equally choose validation set
-		train_id_list = list(np.linspace(0, total_num-1, int(total_num*0.8)).astype(int))
+		#train_id_list = list(np.linspace(0, total_num-1, int(total_num*0.8)).astype(int))
+		train_id_list = list(range(int(total_num*0.8)))
 		val_id_list = list(set(list(range(total_num))) - set(train_id_list))
 
 		# # last 20% data as validation set
