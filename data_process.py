@@ -65,6 +65,7 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	dist_mask = np.zeros((max_num_object, max_num_object))
 	dist_mask[:num_visible_object, :num_visible_object] = (dist_xy<neighbor_distance).astype(float)
 	# compute relative x and y position matrix
+	
 	headingi = np.zeros((max_num_object, max_num_object))
 	headingj = np.zeros((max_num_object, max_num_object))
 	
