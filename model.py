@@ -78,7 +78,8 @@ class Model(nn.Module):
 		V: nodes
 		'''
 		N, C, V = feature.size() 
-		now_feat = feature.permute(0, 2, 1).contiguous() # to (N, V, T, C)
+		#now_feat = feature.permute(0, 2, 1).contiguous() # to (N, V, T, C)
+		now_feat = feature.contiguous()
 		now_feat = now_feat.view(N*V, C) 
 		return now_feat
 
@@ -130,7 +131,7 @@ class Model(nn.Module):
 		x = self.reshape_for_dec_lstm(x) # (n*v,c)
 		x = x.repeat(6, 1, 1)
 		now_predict, _ = self.dec_lstm(x)
-		now_predict = self.reshape_from_dec_lstm(now_predicts)
+		now_predict = self.reshape_from_dec_lstm(self.op(now_predict.permute(0, 2, 1)))
 
 		return now_predict 
 
