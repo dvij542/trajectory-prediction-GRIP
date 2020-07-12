@@ -18,16 +18,14 @@ class Graph_Conv_Block(nn.Module):
 		
 		self.gcn = ConvTemporalGraphical(in_channels, out_channels, kernel_size[1])
 		self.tcn = nn.Sequential(
-			nn.BatchNorm2d(out_channels),
+			nn.BatchNorm1d(out_channels),
 			nn.ReLU(inplace=False),
-			nn.Conv2d(
+			nn.Conv1d(
 				out_channels,
 				out_channels,
-				(kernel_size[0], 1),
-				(stride, 1),
-				padding,
+				1,
 			),
-			nn.BatchNorm2d(out_channels),
+			nn.BatchNorm1d(out_channels),
 			nn.Dropout(dropout, inplace=False),
 		)
 
@@ -37,12 +35,11 @@ class Graph_Conv_Block(nn.Module):
 			self.residual = lambda x: x
 		else:
 			self.residual = nn.Sequential(
-				nn.Conv2d(
+				nn.Conv1d(
 					in_channels,
 					out_channels,
-					kernel_size=1,
-					stride=(stride, 1)),
-				nn.BatchNorm2d(out_channels),
+					kernel_size=1),
+				nn.BatchNorm1d(out_channels),
 			)
 		self.relu = nn.ReLU(inplace=False)
 
