@@ -20,7 +20,7 @@ class ConvTemporalGraphical(nn.Module):
                     5,
                     16,
                     kernel_size = 1,
-                    stride=(1,1)),
+                    stride=1),
                 #nn.BatchNorm2d(16),
                 nn.ReLU(inplace=False),
                 nn.Dropout(0.5, inplace=False),
@@ -28,7 +28,7 @@ class ConvTemporalGraphical(nn.Module):
                     16,
                     32,
                     kernel_size = 1,
-                    stride=(1,1)),
+                    stride=1),
                 #nn.BatchNorm2d(16),
                 nn.ReLU(inplace=False),
                 nn.Dropout(0.5, inplace=False),
@@ -36,41 +36,51 @@ class ConvTemporalGraphical(nn.Module):
                     32,
                     64,
                     kernel_size = 1,
-                    stride=(1,1)),
+                    stride=1),
                 #nn.BatchNorm2d(16),
                 #nn.BatchNorm2d(16),
-                nn.ReLU(inplace=False),
-                nn.Dropout(0.5, inplace=False)
-
+                #nn.ReLU(inplace=False),
+                nn.Dropout(0.5, inplace=False),
+                # nn.ReLU(inplace=False)
+                nn.Sigmoid()
             )
+        self.normalize = nn.Softmax(dim=2)
         # To increase the no of channels of the graph to out_channels*k
-        self.conv = nn.Conv2d(
+        self.conv = nn.Conv1d(
             in_channels,
-            out_channels * kernel_size,
-            kernel_size=(t_kernel_size, 1),
-            padding=(t_padding, 0),
-            stride=(t_stride, 1),
-            dilation=(t_dilation, 1),
-            bias=bias)
+            out_channels,
+            kernel_size=1,bias=bias)
+        self.convo = nn.Conv1d(
+            in_channels,
+            out_channels,
+            kernel_size=1,bias=bias)
+        self.relu = nn.ReLU(inplace=False)
 
-    def forward(self, x, A):
+    def forward(self, x, xo, A):
         assert A.size(1) == self.kernel_size
         x = self.conv(x)
-        mask = A[:,5]
-
+        xo = self.convo(xo)
+        # To increase the no of channels of the graph to out_channels*k
+        #n, kc, t, v = x.size()
+        mask1 = A[:,5:]
+        #mask2 = torch.zeros((n,1,v,v))
+        for i in range(120) :
+            mask1[:,0,i,i] = 0
+        #mask2[:,0,i,i] = 1
         A = self.adjmatder(A[:,:5])
         # A is (n,64,v,v)
-        A = A*mask
-        Dl = ((A.sum(axis=2) + 0.001)**(-1)).float()
+        #A = A-(1-mask1)*100000.
+        #A = self.normalize(A)
+        # A is (2,n,64,v,v)
+        #Dl = ((A.sum(axis=3) + 0.001)**(-1)).float()
         # Dl is (n,64,v)
-        A = torch.einsum('ncvw,ncw->ncvw',(A,Dl))
+        #A = torch.einsum('ncvw,ncw->ncvw',(A,Dl))
         
-        # To increase the no of channels of the graph to out_channels*k
-        n, c, t, v = x.size()
         # x is now a 5d tensor with size (N,k,c,t,v)
-        x = x.view(n, c, t, v)
+        #x = x.view(n, 2, kc/2, t, v)
         #A is (n,64,v,v)
         # Matrix multiplication followed by addition of all individual kernel matrices
-        x = torch.einsum('nctv,ncvw->nctw', (x, A))
+        x = self.relu(torch.einsum('ncv,ncvw->ncw', (xo, A)))
+
 
         return x.contiguous(), A
