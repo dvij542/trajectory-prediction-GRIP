@@ -26,9 +26,16 @@ class Feeder(torch.utils.data.Dataset):
 		train_val_test: (train, val, test)
 		'''
 		self.data_path = data_path
-		self.load_data()
-
-		total_num = len(self.all_feature)
+		global all_feature
+		global all_adjacency
+		global all_mean_xy
+		global rev_angle_mat
+		if train_val_test.lower() == 'train':
+			with open(self.data_path, 'rb') as reader:
+			# Training (N, C, T, V)=(5010, 11, 12, 120), (5010, 120, 120), (5010, 2)
+				[rev_angle_mat, all_feature, all_adjacency, all_mean_xy]= pickle.load(reader)
+			
+		total_num = 4739
 		# equally choose validation set
 		#train_id_list = list(np.linspace(0, total_num-1, int(total_num*0.8)).astype(int))
 		train_id_list = list(range(int(total_num*0.8)))
@@ -38,20 +45,27 @@ class Feeder(torch.utils.data.Dataset):
 		self.train_val_test = train_val_test
 
 		if train_val_test.lower() == 'train':
-			self.all_feature = self.all_feature[train_id_list]
-			self.all_adjacency = self.all_adjacency[train_id_list]
-			self.all_mean_xy = self.all_mean_xy[train_id_list]
+			self.all_feature = all_feature[train_id_list]
+			self.all_adjacency = all_adjacency[train_id_list]
+			self.all_mean_xy = all_mean_xy[train_id_list]
+			self.rev_angle_mat = rev_angle_mat[train_id_list]
+			all_feature = all_feature[val_id_list]
+			all_adjacency = all_adjacency[val_id_list]
+			all_mean_xy = all_mean_xy[val_id_list]
+			rev_angle_mat = rev_angle_mat[val_id_list]
+
 		elif train_val_test.lower() == 'val':
-			self.all_feature = self.all_feature[val_id_list]
-			self.all_adjacency = self.all_adjacency[val_id_list]
-			self.all_mean_xy = self.all_mean_xy[val_id_list]
+			self.all_feature = all_feature
+			self.all_adjacency = all_adjacency
+			self.all_mean_xy = all_mean_xy
+			self.rev_angle_mat = rev_angle_mat
 
 		self.graph = Graph(**graph_args) #num_node = 120,max_hop = 1
 
 	def load_data(self):
 		with open(self.data_path, 'rb') as reader:
 			# Training (N, C, T, V)=(5010, 11, 12, 120), (5010, 120, 120), (5010, 2)
-			[self.all_feature, self.all_adjacency, self.all_mean_xy]= pickle.load(reader)
+			[self.rev_angle_mat, all_feature, all_adjacency, all_mean_xy]= pickle.load(reader)
 			
 
 	def __len__(self):
@@ -61,9 +75,9 @@ class Feeder(torch.utils.data.Dataset):
 		# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
 		now_feature = self.all_feature[idx].copy() # (C, T, V) = (11, 12, 120)
 		now_mean_xy = self.all_mean_xy[idx].copy() # (2,) = (x, y) 
-
+		rev_angle_mat = self.rev_angle_mat[idx].copy()
 		# Create more data by rotating x and y coordinates of all the vehicles at all time steps by a random amount 
-		if self.train_val_test.lower() == 'train' and np.random.random()>0.5:
+		if self.train_val_test.lower() == 'train' and np.random.random()>1:
 			angle = 2 * np.pi * np.random.random()
 			sin_angle = np.sin(angle)
 			cos_angle = np.cos(angle)
@@ -82,8 +96,8 @@ class Feeder(torch.utils.data.Dataset):
 
 			now_feature[3:5, :, :] = xy
 
-		now_adjacency = self.graph.get_adjacency(self.all_adjacency[idx])
-		now_A = self.graph.normalize_adjacency(now_adjacency)
+		#now_adjacency = self.graph.get_adjacency(self.all_adjacency[idx])
+		#now_A = self.graph.normalize_adjacency(now_adjacency)
 		
-		return now_feature, now_A, now_mean_xy
+		return rev_angle_mat, now_feature, self.all_adjacency[idx], now_mean_xy
 
