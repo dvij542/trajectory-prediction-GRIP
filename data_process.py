@@ -21,7 +21,7 @@ total_feature_dimension = 10 + 1 # we add mark "1" to the end of each row to ind
 
 # after zero centralize data max(x)=127.1, max(y)=106.1, thus choose 130
 
-def get_frame_instance_dict(pra_file_path):
+def get_frame_instance_dict(pra_file_path):		#explained as multiline comment below
 	'''
 	Read raw data from files and return a dictionary: 
 		{frame_id: 
