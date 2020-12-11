@@ -45,27 +45,46 @@ class Model(nn.Module):
 		self.seq2seq_bike = Seq2Seq(input_size=(64), hidden_size=out_dim_per_node, num_layers=2, dropout=0.5, isCuda=True)
 
 
-	def reshape_for_lstm(self, feature):	# raw feature from ds -> reshaped_feature
+	def reshape_for_lstm(self, feature):	
 		# prepare for skeleton prediction model
 		'''
 		N: batch_size
 		C: channel
 		T: time_step
 		V: nodes
+
+		raw feature from ds -> reshaped_feature
+
+		(N,C,T,V) -> (N,V,T,C)
 		'''
 		N, C, T, V = feature.size() 
 		now_feat = feature.permute(0, 3, 2, 1).contiguous() # to (N, V, T, C)
 		now_feat = now_feat.view(N*V, T, C) 
 		return now_feat
 
-	def reshape_from_lstm(self, predicted):		#predicted from lstm -> feature with original dims
+	def reshape_from_lstm(self, predicted):		
 		# predicted (N*V, T, C)
+		'''
+		N: batch_size
+		C: channel
+		T: time_step
+		V: nodes
+
+		predicted from lstm -> feature with original dims
+
+		(N,V,T,C) -> (N,C,T,V)
+		'''
 		NV, T, C = predicted.size()
 		now_feat = predicted.view(-1, self.num_node, T, self.out_dim_per_node) # (N, T, V, C) -> (N, C, T, V) [(N, V, T, C)]
 		now_feat = now_feat.permute(0, 3, 2, 1).contiguous() # (N, C, T, V)
 		return now_feat
 
-	def forward(self, pra_x, pra_A, pra_pred_length, pra_teacher_forcing_ratio=0, pra_teacher_location=None):	#self, params -> prediction (avg of the 3 classes)
+	def forward(self, pra_x, pra_A, pra_pred_length, pra_teacher_forcing_ratio=0, pra_teacher_location=None):	
+		'''
+		forward pass of model using both seq2seq2 and lstm
+		
+		self, params -> prediction (avg of the 3 classes)
+		'''
 		x = pra_x
 		
 		# forward

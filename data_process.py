@@ -21,7 +21,7 @@ total_feature_dimension = 10 + 1 # we add mark "1" to the end of each row to ind
 
 # after zero centralize data max(x)=127.1, max(y)=106.1, thus choose 130
 
-def get_frame_instance_dict(pra_file_path):		#explained as multiline comment below
+def get_frame_instance_dict(pra_file_path):		
 	'''
 	Read raw data from files and return a dictionary: 
 		{frame_id: 
@@ -45,6 +45,19 @@ def get_frame_instance_dict(pra_file_path):		#explained as multiline comment bel
 	return now_dict
 
 def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
+	'''
+	Read the raw data and build the neighbour_matrix (if < $neighbour_distance) and object_feature_list
+
+	{
+		object_frame_feature: np array with trailing elements (:num_visible_object+num_non_visible_object) as the transpose of object_feature_list, and other elements 0
+		object_feature_list: dict with now_frame_feature with all objects in current frame (for all frame_ids)
+		neighbour_matrix: np array with trailing elements (:num_visible_object+num_non_visible_object) as neighbour_distance
+		m_xy: int
+	}
+
+	pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last -> object_frame_feature, neighbor_matrix, m_xy
+
+	'''
 	visible_object_id_list = list(pra_now_dict[pra_observed_last].keys()) # object_id appears at the last observed frame 
 	num_visible_object = len(visible_object_id_list) # number of current observed objects
 
@@ -91,13 +104,15 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 
 def generate_train_data(pra_file_path):
 	'''
-	Read data from $pra_file_path, and split data into clips with $total_frames length. 
+	Read train data from $pra_file_path, and split data into clips with $total_frames length. 
 	Return: feature and adjacency_matrix
 		feture: (N, C, T, V) 
 			N is the number of training data 
 			C is the dimension of features, 10raw_feature + 1mark(valid data or not)
 			T is the temporal length of the data. history_frames + future_frames
 			V is the maximum number of objects. zero-padding for less objects. 
+
+			$pra_file_path -> all_feature_list, all_adjacency_list, all_mean_list
 	'''
 	now_dict = get_frame_instance_dict(pra_file_path)
 	frame_id_set = sorted(set(now_dict.keys()))
@@ -124,6 +139,18 @@ def generate_train_data(pra_file_path):
 
 
 def generate_test_data(pra_file_path):
+	'''
+	Read test data from $pra_file_path, and split data into clips with $history_frames length. 
+	Return: feature and adjacency_matrix
+		feture: (N, C, T, V) 
+			N is the number of training data 
+			C is the dimension of features, 10raw_feature + 1mark(valid data or not)
+			T is the temporal length of the data. history_frames + future_frames
+			V is the maximum number of objects. zero-padding for less objects. 
+
+			$pra_file_path -> all_feature_list, all_adjacency_list, all_mean_list
+
+	'''
 	now_dict = get_frame_instance_dict(pra_file_path)
 	frame_id_set = sorted(set(now_dict.keys()))
 	
@@ -152,6 +179,9 @@ def generate_test_data(pra_file_path):
 
 
 def generate_data(pra_file_path_list, pra_is_train=True):
+	'''
+	code to reshape and generate data for pkl file generation
+	'''
 	all_data = []
 	all_adjacency = []
 	all_mean_xy = []
