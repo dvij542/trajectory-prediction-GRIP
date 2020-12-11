@@ -43,7 +43,7 @@ test_result_file = 'prediction_result.txt'
 
 criterion = torch.nn.SmoothL1Loss()
 
-if not os.path.exists(work_dir):
+if not os.path.exists(work_dir):# for creating directory
 	os.makedirs(work_dir)
 
 # For saving to lof file
@@ -52,12 +52,19 @@ def my_print(pra_content):
 		print(pra_content)
 		writer.write(pra_content+'\n')
 def my_print_epoch(pra_content):
-	with open(log_file_epoch, 'a') as writer:
+	with open(log_file_epoch, 'a') as writer:# not understood why write same things in two sepearte file 
 		#print(pra_content)
 		writer.write(pra_content+'\n')
 
 # For dislaying result on screen
 def display_result(pra_results, pra_pref='Train_epoch'):
+"""
+description = for displaying result 
+input:
+pra_results<array> = results(errors(rmse sum)+interactions(mask sum))
+keyword argument :
+pra_pref<class> = class of object(human ,bike ,car etc) default = train epoch 
+"""  
 	all_overall_sum_list, all_overall_num_list = pra_results
 	overall_sum_time = np.sum(all_overall_sum_list, axis=0)
 	overall_num_time = np.sum(all_overall_num_list, axis=0)
@@ -86,27 +93,49 @@ def my_load_model(pra_model, pra_path):
 
 # custom dataloader and dataset class
 def data_loader(pra_path, pra_batch_size=128, pra_shuffle=False, pra_drop_last=False, train_val_test='train'):
+""" for data loader 
+input dim = int 
+output = loader(pikle files )
+Keyword Arguments:
+batch size = batch size(64) default is 128
+pra_path= path of the pikle file for (train , test , val)
+pra_shuffle= for suffling od data deafult false 
+pra_drop_last = for droping the last coloumn of features deafault false 
+train_val_test = for which action (train ,val ,test) deafult = train 
+"""
 	feeder = Feeder(data_path=pra_path, graph_args=graph_args, train_val_test=train_val_test)
 	loader = torch.utils.data.DataLoader(
 		dataset=feeder,
 		batch_size=pra_batch_size,
 		shuffle=pra_shuffle,
 		drop_last=pra_drop_last, 
-		num_workers=10,
+		num_workers=10,#number of features C=10 
 		)
 	return loader
 	
 def preprocess_data(pra_data, pra_rescale_xy):
+"""
+keyword argument:
+pra_data = data for calculating velocity and remove unnesssaey features 
+pre_rescale_xy = for rescaling data 
+output:
+data = contains velocity size = (N,4,T,V)
+ori_data = contains position = (N,4,T,V)
+object_type= class of objects size = (N,1,T,V)
+"""
+
+
 	# pra_data: (N, C, T, V)
-	# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]	
+	# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
+        
 	feature_id = [3, 4, 9, 10]
-	ori_data = pra_data[:,feature_id].detach()
+	ori_data = pra_data[:,feature_id].detach()#size(N ,4 ,T,V)
 	data = ori_data.detach().clone()
 
 	new_mask = (data[:, :2, 1:]!=0) * (data[:, :2, :-1]!=0) 
 	# data contains velocity
-	data[:, :2, 1:] = (data[:, :2, 1:] - data[:, :2, :-1]).float() * new_mask.float()
-	data[:, :2, 0] = 0	
+	data[:, :2, 1:] = (data[:, :2, 1:] - data[:, :2, :-1]).float() * new_mask.float()#for calculating velocity from 2 to 12 frame 1 to 11 frame and put delta x AND delta y at the place of x and y
+	data[:, :2, 0] = 0# velocity at starting frame =0	
 
 
 	# # small vehicle: 1, big vehicles: 2, pedestrian 3, bicycle: 4, others: 5
@@ -120,18 +149,44 @@ def preprocess_data(pra_data, pra_rescale_xy):
 	return data, ori_data, object_type # data contains velocity, ori_data contains position and object_type contains type of the object
 	
 def compute_RMSE(pra_pred, pra_GT, pra_mask, pra_error_order=2):
-	pred = pra_pred * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
-	GT = pra_GT * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
+"""
+description:
+for computing root mean square error between predicted and ground truth
+input:
+pra_pred = predicted by model size (N,2,6,120)
+pra_gt = ground truth (N,2,6,120)
+pra_mask = mask for deciding interaction to be considered or not size =(N,1,6,120)
+pra_error_order= for error calculation default =2
+output:
+overall_sum_time = error of total objects size = (N,6)
+overall_num = sum of mask (how many interactions happen ) size = (N,6)
+x2y2 = rmse if pra_error_order = 2 else mse size=(N,6,120) 
+"""
+	pred = pra_pred * pra_mask # (N, C, T, V)=(N, 2, 6, 120)# predictede by model
+	GT = pra_GT * pra_mask # (N, C, T, V)=(N, 2, 6, 120)# ground truth 
 	if pra_error_order ==2 :
-		x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1)**0.5 # x^2+y^2, (N, C, T, V)->(N, T, V)=(N, 6, 120)
+		x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1)**0.5 # x^2+y^2, (N, C, T, V)->(N, T, V)=(N, 6, 120)# rootof sum of squares of errors 
 	else :
 		x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1)
-	overall_sum_time = x2y2.sum(dim=-1) # (N, T, V) -> (N, T)=(N, 6)
+	overall_sum_time = x2y2.sum(dim=-1) # (N, T, V) -> (N, T)=(N, 6) # sum of errors of for all objects 
 	overall_mask = pra_mask.sum(dim=1).sum(dim=-1) # (N, C, T, V) -> (N, T)=(N, 6)
 	overall_num = overall_mask
 
 	return overall_sum_time, overall_num, x2y2
 def compute_RMSE_old(pra_pred, pra_GT, pra_mask, pra_error_order=2):
+"""
+description:
+for computing root mean square error between predicted and ground truth
+input:
+pra_pred = predicted by model size (N,2,6,120)
+pra_gt = ground truth (N,2,6,120)
+pra_mask = mask for deciding interaction to be considered or not size =(N,1,6,120)
+pra_error_order= for error calculation default =2
+output:
+overall_sum_time = error of total objects size = (N,6)
+overall_num = sum of mask (how many interactions happen ) size = (N,6)
+x2y2 = rmse if pra_error_order = 2 else mse size=(N,6,120) 
+"""
 	pred = pra_pred * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
 	GT = pra_GT * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
 	
@@ -144,6 +199,15 @@ def compute_RMSE_old(pra_pred, pra_GT, pra_mask, pra_error_order=2):
 
 
 def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
+"""
+description = for training the model 
+input:
+pra_model = model
+pra_data_loader = dataser loader 
+pra_optimizer = optimizer (adam , lr = 0.0001)
+pra_epoch_log = epoch formate (nowepoch/total epoch )
+output = nothing 
+"""
 	# pra_model.to(dev)
 	pra_model.train()
 	rescale_xy = torch.ones((1,2,1,1)).to(dev)
@@ -186,6 +250,16 @@ def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
 		
 
 def val_model(pra_model, pra_data_loader):
+"""
+description = for validation purpose how our model is training (observe 5 frame and predict one frame )
+input:
+pra_model = model
+pra_data_loader = dataset loader for validation (shuffle = false , pra_drop_last= false )
+output:
+all_overall_sum_list<list> = sum of rmse errors of objects 
+all_overall_num_list<list> = sum of mask(how many interaction happen )
+"""
+ 
 	# pra_model.to(dev)
 	pra_model.eval()
 	rescale_xy = torch.ones((1,2,1,1)).to(dev)
@@ -274,7 +348,7 @@ def val_model(pra_model, pra_data_loader):
 	result_human = display_result([np.array(all_human_sum_list), np.array(all_human_num_list)], pra_pref='human')
 	result_bike = display_result([np.array(all_bike_sum_list), np.array(all_bike_num_list)], pra_pref='bike')
 	
-	result = (0.2*result_car + 0.58*result_human + 0.22*result_bike)
+	result = (0.2*result_car + 0.58*result_human + 0.22*result_bike)#wietage is given by invers realation of velocity 
 	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), 'WS', ' '.join(['{:.3f}'.format(x) for x in list(result) + [np.sum(result)/6.]]))
 	my_print(overall_log)
 	overall_log_epoch = '|{}|[{}] All_All: {}'.format(datetime.now(), 'WS', ' '.join(['{:.3f}'.format(x) for x in list(result) + [np.sum(result)/6.]]))
@@ -286,6 +360,13 @@ def val_model(pra_model, pra_data_loader):
 
 
 def test_model(pra_model, pra_data_loader):
+"""
+description = for testing model
+input:
+pra_model = saved model
+pra_data_loader = dataloader for testing dataset 
+output: write the result in test_result_file
+"""
 	# pra_model.to(dev)
 	pra_model.eval()
 	rescale_xy = torch.ones((1,2,1,1)).to(dev)
@@ -340,8 +421,16 @@ def test_model(pra_model, pra_data_loader):
 						writer.write(result)
 
 
-def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):
-	loader_train = data_loader(pra_traindata_path, pra_batch_size=batch_size_train, pra_shuffle=True, pra_drop_last=True, train_val_test='train')
+def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):# pra model= model, pra_traindata_path = path of train.piklefile
+"""
+description = for loading data , train and val and saving model
+input:
+pra_model = model
+pra_traindata_path = path of train.pkl file 
+pra_testdata_path = path of test.pkl file
+output= nothing 
+""" 
+	loader_train = data_loader(pra_traindata_path, pra_batch_size=batch_size_train, pra_shuffle=True, pra_drop_last=True, train_val_test='train')# for training batch_size=64,
 	loader_test = data_loader(pra_testdata_path, pra_batch_size=batch_size_train, pra_shuffle=True, pra_drop_last=True, train_val_test='all')
 
 	# evaluate on testing data (observe 5 frame and predict 1 frame)
@@ -351,7 +440,7 @@ def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):
 		[{'params':model.parameters()},],) # lr = 0.0001)
 		
 	for now_epoch in range(total_epoch):
-		all_loader_train = itertools.chain(loader_train, loader_test)
+		all_loader_train = itertools.chain(loader_train, loader_test)# for producing various function for iterators 
 		
 		my_print('#######################################Train')
 		train_model(pra_model, all_loader_train, pra_optimizer=optimizer, pra_epoch_log='Epoch:{:>4}/{:>4}'.format(now_epoch, total_epoch))
@@ -368,6 +457,13 @@ def run_trainval(pra_model, pra_traindata_path, pra_testdata_path):
 
 
 def run_test(pra_model, pra_data_path):
+"""
+description = for testing 
+input:
+pra_model = saved model 
+pra_data_path = path of test.pkl file 
+output : nothing
+"""
 	loader_test = data_loader(pra_data_path, pra_batch_size=batch_size_test, pra_shuffle=False, pra_drop_last=False, train_val_test='test')
 	test_model(pra_model, loader_test)
 
@@ -385,6 +481,10 @@ if __name__ == '__main__':
 	# model = my_load_model(model, pretrained_model_path)
 	# run_test(model, './test_data.pkl')
 	
+		
+		
+
+
 		
 		
 
