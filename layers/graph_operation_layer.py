@@ -11,6 +11,18 @@ class ConvTemporalGraphical(nn.Module):
                  t_padding=0,
                  t_dilation=1,
                  bias=True):
+        """Constructor for ConvTemporalGraphical class.
+        Arguments:
+            in_channels {int} -- Number of input channels,
+            out_channels {int} -- Number of output channels,
+            kernel_size {int} -- Kernel size for increasing no of channels,
+            t_kernel_size {int} -- Kernel size dimension,
+            t_stride {int} -- Stride dimension,
+            t_padding {int} -- Padding dimension,
+            t_dilation {int} -- Dilation dimension,
+            bias {bool} -- If True, adds a learnable bias to the output.
+
+        """
         super().__init__()
 
         self.kernel_size = kernel_size
@@ -25,6 +37,20 @@ class ConvTemporalGraphical(nn.Module):
             bias=bias)
 
     def forward(self, x, A):
+        """Forward function of the Graph operation layer.
+        Arguments:
+            x {torch.Tensor} -- Input to the layer -- [n (batch_size), 
+                                                        kc (kernel size * channels), 
+                                                        t (time_step), 
+                                                        v (nodes)]
+            A {torch.Tensor} -- Fixed Graph (Adjacency Matrix) -- [n (batch_size),
+                                                                    k (kernel_size),
+                                                                    v (nodes),
+                                                                    w (nodes)]
+        
+        Returns:
+        (torch.Tensor, torch.Tensor) -- (Output to the layer, Adjacency Matrix)
+        """
         assert A.size(1) == self.kernel_size
         x = self.conv(x)
         # To increase the no of channels of the graph to out_channels*k

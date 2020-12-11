@@ -10,6 +10,15 @@ class Graph_Conv_Block(nn.Module):
 				 stride=1,
 				 dropout=0,
 				 residual=True):
+		""" Constructor for Graph_Conv_Block class
+			Arguments:
+				in_channels {int} -- Number of input channels,
+				out_channels {int} -- Number of output channels,
+				kernel_size {int} -- Kernel size,
+				stride {int} -- Stride,
+				dropout {float} -- Probability of an element to be dropped,
+				residual {bool} -- If True, adds a residual connection between input and output)
+		"""
 		super().__init__()
 
 		assert len(kernel_size) == 2
@@ -47,6 +56,11 @@ class Graph_Conv_Block(nn.Module):
 		self.relu = nn.ReLU(inplace=False)
 
 	def forward(self, x, A):
+		""" Forward function of Graph convolution block
+			Arguments:
+				x {torch.Tensor} -- Input to the block
+				A {torch.Tensor} -- Adjacency matrix
+		"""
 		res = self.residual(x)
 		x, A = self.gcn(x, A)
 		x = self.tcn(x) + res
