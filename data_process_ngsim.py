@@ -87,8 +87,8 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	classi = np.zeros((max_num_object,max_num_object))
 	classj = np.zeros((max_num_object,max_num_object))
 	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
-		classi[i,j] = (veh_class[i]==3).astype(float)
-		classj[i,j] = (veh_class[j]==3).astype(float)
+		classi[i,j] = (veh_class[i]==2).astype(float)
+		classj[i,j] = (veh_class[j]==2).astype(float)
 	lanei = np.zeros((max_num_object,max_num_object))
 	lanej = np.zeros((max_num_object,max_num_object))
 	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
