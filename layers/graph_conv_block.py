@@ -10,34 +10,24 @@ class Graph_Conv_Block(nn.Module):
 				 stride=1,
 				 dropout=0,
 				 residual=True):
-		""" Constructor for Graph_Conv_Block class
-			Arguments:
-				in_channels {int} -- Number of input channels,
-				out_channels {int} -- Number of output channels,
-				kernel_size {int} -- Kernel size,
-				stride {int} -- Stride,
-				dropout {float} -- Probability of an element to be dropped,
-				residual {bool} -- If True, adds a residual connection between input and output)
-		"""
 		super().__init__()
 
 		assert len(kernel_size) == 2
-		assert kernel_size[0] % 2 == 1
+		assert kernel_size[0] % 2 == 0
 		padding = ((kernel_size[0] - 1) // 2, 0)
 		
 		self.gcn = ConvTemporalGraphical(in_channels, out_channels, kernel_size[1])
 		self.tcn = nn.Sequential(
-			nn.BatchNorm2d(out_channels),
+			nn.BatchNorm1d(out_channels),
 			nn.ReLU(inplace=False),
-			nn.Conv2d(
+			nn.Conv1d(
 				out_channels,
 				out_channels,
-				(kernel_size[0], 1),
-				(stride, 1),
-				padding,
+				1,
 			),
-			nn.BatchNorm2d(out_channels),
+			nn.BatchNorm1d(out_channels),
 			nn.Dropout(dropout, inplace=False),
+			nn.Sigmoid()
 		)
 
 		if not residual:
@@ -46,23 +36,23 @@ class Graph_Conv_Block(nn.Module):
 			self.residual = lambda x: x
 		else:
 			self.residual = nn.Sequential(
-				nn.Conv2d(
+				nn.Conv1d(
 					in_channels,
 					out_channels,
-					kernel_size=1,
-					stride=(stride, 1)),
-				nn.BatchNorm2d(out_channels),
+					kernel_size=1),
+				nn.BatchNorm1d(out_channels),
 			)
 		self.relu = nn.ReLU(inplace=False)
 
-	def forward(self, x, A):
-		""" Forward function of Graph convolution block
-			Arguments:
-				x {torch.Tensor} -- Input to the block
-				A {torch.Tensor} -- Adjacency matrix
-		"""
-		res = self.residual(x)
-		x, A = self.gcn(x, A)
-		x = self.tcn(x) + res
-		return self.relu(x), A
+	def forward(self, x, xo, A):
+		# res = self.residual(x)
+		print('bc')
+		print(x.shape)
+		print(xo.shape)
+		print(A.shape)
+		x, A = self.gcn(x, xo, A)
+		print(x.shape)
+		print(A.shape)
+		#x = self.tcn(x) #+ res
+		return x, A
 
