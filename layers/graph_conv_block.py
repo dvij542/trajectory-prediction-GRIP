@@ -18,16 +18,17 @@ class Graph_Conv_Block(nn.Module):
 		
 		self.gcn = ConvTemporalGraphical(in_channels, out_channels, kernel_size[1])
 		self.tcn = nn.Sequential(
-			nn.BatchNorm1d(out_channels),
+			nn.BatchNorm2d(out_channels),
 			nn.ReLU(inplace=False),
-			nn.Conv1d(
+			nn.Conv2d(
 				out_channels,
 				out_channels,
-				1,
+				(kernel_size[0], 1),
+				(stride, 1),
+				padding,
 			),
-			nn.BatchNorm1d(out_channels),
+			nn.BatchNorm2d(out_channels),
 			nn.Dropout(dropout, inplace=False),
-			nn.Sigmoid()
 		)
 
 		if not residual:
@@ -36,17 +37,18 @@ class Graph_Conv_Block(nn.Module):
 			self.residual = lambda x: x
 		else:
 			self.residual = nn.Sequential(
-				nn.Conv1d(
+				nn.Conv2d(
 					in_channels,
 					out_channels,
-					kernel_size=1),
-				nn.BatchNorm1d(out_channels),
+					kernel_size=1,
+					stride=(stride, 1)),
+				nn.BatchNorm2d(out_channels),
 			)
 		self.relu = nn.ReLU(inplace=False)
 
-	def forward(self, x, xo, A):
-		# res = self.residual(x)
-		x, A = self.gcn(x, xo, A)
-		#x = self.tcn(x) #+ res
-		return x, A
-
+	def forward(self, x, A):
+		res = self.residual(x)
+		print(x.shape)
+		x, A = self.gcn(x, A)
+		x = self.tcn(x) + res
+		return self.relu(x), A
