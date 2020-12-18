@@ -40,8 +40,8 @@ class Model(nn.Module):
 		self.st_gcn_networks = nn.ModuleList((
 			#nn.BatchNorm2d(in_channels),
 			Graph_Conv_Block(64, 64, kernel_size, 1, **kwargs),
-			#Graph_Conv_Block(64, 64, kernel_size, 1, **kwargs),
-			#Graph_Conv_Block(64, 64, kernel_size, 1, **kwargs),
+			Graph_Conv_Block(64, 64, kernel_size, 1, **kwargs),
+			Graph_Conv_Block(64, 64, kernel_size, 1, **kwargs),
 		))
 
 		# initialize parameters for edge importance weighting
@@ -57,7 +57,7 @@ class Model(nn.Module):
 		self.seq2seq = Seq2Seq(input_size=(64), hidden_size=out_dim_per_node, num_layers=2, dropout=0.5, isCuda=True)
 		self.sigmoid = nn.Sigmoid()
 		self.maxpool = nn.MaxPool1d(4)
-		self.extract_features = nn.Linear(16,128)
+		self.extract_features = nn.Linear(64,128)
 		# self.seq2seq_human = Seq2Seq(input_size=(64), hidden_size=out_dim_per_node, num_layers=2, dropout=0.5, isCuda=True)
 		# self.seq2seq_bike = Seq2Seq(input_size=(64), hidden_size=out_dim_per_node, num_layers=2, dropout=0.5, isCuda=True)
 
@@ -105,6 +105,11 @@ class Model(nn.Module):
 		return now_feat
 
 	def forward(self, pra_x, pra_A, pra_pred_length, pra_teacher_forcing_ratio=0, pra_teacher_location=None):
+		'''
+		forward pass of model using both seq2seq2 and lstm
+		
+		self, params -> prediction (avg of the 3 classes)
+		'''
 		x = pra_x
 		# input is NCTV
 		# forward
@@ -126,10 +131,10 @@ class Model(nn.Module):
 		
 		# x has the probability distribution of each planned traj feature
 		# print(x.shape)
-		x = hist_enc.permute(0,2,1)
-		x = self.maxpool(x)
+		x = hist_enc.permute(0,2,1).to('cuda:0')
+		#x = self.maxpool(x)
 		print(x.shape)
-		x = x/(torch.sum(x, axis=1, keepdims=True))
+		#x = x/(torch.sum(x, axis=1, keepdims=True))
 		x = self.extract_features(x)
 		x = x.permute(0,2,1)
 		

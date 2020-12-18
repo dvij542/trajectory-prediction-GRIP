@@ -9,6 +9,13 @@ import numpy as np
 ####################################################
 class EncoderRNN(nn.Module):
 	def __init__(self, input_size, hidden_size, num_layers, isCuda=True):
+		""" Constructor for RNN Encoder class
+			Arguments:	
+				input_size {int}, 
+				hidden_size {int}, 
+				num_layers {int}, 
+				isCuda {bool}
+		"""
 		super(EncoderRNN, self).__init__()
 		self.input_size = input_size
 		self.hidden_size = hidden_size
@@ -18,11 +25,29 @@ class EncoderRNN(nn.Module):
 		self.lstm = nn.GRU(input_size, hidden_size*32, 1, batch_first=True)
 		
 	def forward(self, input):
+		""" Forward function of RNN Encoder
+			Arguments:
+				input -- input_size {int},
+							hidden_size {int},
+							num_layers {int},
+							batch_first {bool}
+				Returns:
+					output {torch.tensor} -- Tensor containing the output features (Encoded input)
+					hidden {(torch.Tensor, torch.Tensor)} -- (Hidden states, Cell states)
+		"""
 		output, hidden = self.lstm(input)
 		return output, hidden
 
 class DecoderRNN(nn.Module):
 	def __init__(self, hidden_size, output_size, num_layers, dropout=0.5, isCuda=True):
+		""" Constructor for RNN Decoder class
+			Arguments:
+				hidden_size {int}, 
+				output_size {int},
+				num_layers {int},
+				dropout {int},
+				isCuda {bool}
+		"""
 		super(DecoderRNN, self).__init__()
 		self.hidden_size = hidden_size
 		self.output_size = output_size
@@ -38,6 +63,14 @@ class DecoderRNN(nn.Module):
 		self.tanh = nn.Tanh()
 	
 	def forward(self, encoded_input, hidden):
+		""" Forward function for RNN Decoder
+			Arguments:
+				encoded_input {torch.Tensor}
+				hidden {(torch.Tensor, torch.Tensor)}
+			Returns:
+				decoded_input {torch.Tensor}
+				hidden {torch.Tensor, torch.Tensor}
+		"""
 		decoded_output, hidden = self.lstm(encoded_input, hidden)
 		# decoded_output = self.tanh(decoded_output)
 		# decoded_output = self.sigmoid(decoded_output)
@@ -49,6 +82,14 @@ class DecoderRNN(nn.Module):
 
 class Seq2Seq(nn.Module):
 	def __init__(self, input_size, hidden_size, num_layers, dropout=0.5, isCuda=True):
+		""" Constructor for Seq2Seq class
+			Arguments:
+				input_size {int},
+				hidden_size {int},
+				num_layers {int},
+				dropout {int},
+				isCuda {bool},
+		"""
 		super(Seq2Seq, self).__init__()
 		self.isCuda = True
 		# self.pred_length = pred_length
@@ -56,6 +97,14 @@ class Seq2Seq(nn.Module):
 		self.decoder = DecoderRNN(hidden_size, hidden_size, num_layers, dropout, isCuda)
 	
 	def forward(self, encdec, in_data, last_location, pred_length, teacher_forcing_ratio=0, teacher_location=None):
+		""" Forward function for Seq2Seq
+			Arguments:
+				in_data {torch.Tensor} -- Encoder input,
+				last_location {torch.Tensor} -- Decoder input,
+				pred_length {int} -- Predicted length,
+				teacher_forcing_ratio {float},
+				teacher_location
+		"""
 		if encdec :
 			encoded_output, hidden = self.encoder(in_data)
 			return hidden

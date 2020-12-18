@@ -35,7 +35,7 @@ class Feeder(torch.utils.data.Dataset):
 			# Training (N, C, T, V)=(5010, 11, 12, 120), (5010, 120, 120), (5010, 2)
 				[rev_angle_mat, all_feature, all_adjacency, all_mean_xy]= pickle.load(reader)
 			
-		total_num = 4739
+		total_num = len(all_feature)
 		# equally choose validation set
 		#train_id_list = list(np.linspace(0, total_num-1, int(total_num*0.8)).astype(int))
 		train_id_list = list(range(int(total_num*0.8)))
@@ -46,12 +46,12 @@ class Feeder(torch.utils.data.Dataset):
 
 		if train_val_test.lower() == 'train':
 			self.all_feature = all_feature[train_id_list]
-			self.all_adjacency = all_adjacency[train_id_list]
-			self.all_mean_xy = all_mean_xy[train_id_list]
-			self.rev_angle_mat = rev_angle_mat[train_id_list]
 			all_feature = all_feature[val_id_list]
+			self.all_adjacency = all_adjacency[train_id_list]
 			all_adjacency = all_adjacency[val_id_list]
+			self.all_mean_xy = all_mean_xy[train_id_list]
 			all_mean_xy = all_mean_xy[val_id_list]
+			self.rev_angle_mat = rev_angle_mat[train_id_list]
 			rev_angle_mat = rev_angle_mat[val_id_list]
 
 		elif train_val_test.lower() == 'val':
@@ -64,7 +64,7 @@ class Feeder(torch.utils.data.Dataset):
 
 	def load_data(self):
 		with open(self.data_path, 'rb') as reader:
-			# Training (N, C, T, V)=(5010, 11, 12, 120), (5010, 120, 120), (5010, 2)
+			# Training (N, C, T, V)=(*, 7, 12, 120), (*, 120, 120), (*, 2)
 			[self.rev_angle_mat, all_feature, all_adjacency, all_mean_xy]= pickle.load(reader)
 			
 
@@ -73,7 +73,7 @@ class Feeder(torch.utils.data.Dataset):
 
 	def __getitem__(self, idx):
 		# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
-		now_feature = self.all_feature[idx].copy() # (C, T, V) = (11, 12, 120)
+		now_feature = self.all_feature[idx].copy() # (C, T, V) = (7, 12, 120)
 		now_mean_xy = self.all_mean_xy[idx].copy() # (2,) = (x, y) 
 		rev_angle_mat = self.rev_angle_mat[idx].copy()
 		# Create more data by rotating x and y coordinates of all the vehicles at all time steps by a random amount 
