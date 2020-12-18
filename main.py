@@ -64,7 +64,7 @@ def display_result_val(pra_results, pra_pref='Train_epoch', epoch_no=0, use_wand
 	all_overall_sum_list, all_overall_num_list, val_metrics = pra_results
 	overall_sum_time = np.sum(all_overall_sum_list, axis=0)
 	overall_num_time = np.sum(all_overall_num_list, axis=0)
-	overall_loss_time = (overall_sum_time / overall_num_time) 
+	overall_loss_time = (overall_sum_time / overall_num_time)**0.5
 	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), pra_pref, ' '.join(['{:.3f}'.format(x) for x in list(overall_loss_time) + [np.sum(overall_loss_time)/6.]]))
 	my_print_epoch(overall_log)
 	my_print(overall_log)
@@ -80,7 +80,7 @@ def display_result(pra_results, pra_pref='Train_epoch'):
 	all_overall_sum_list, all_overall_num_list = pra_results
 	overall_sum_time = np.sum(all_overall_sum_list, axis=0)
 	overall_num_time = np.sum(all_overall_num_list, axis=0)
-	overall_loss_time = (overall_sum_time / overall_num_time) 
+	overall_loss_time = (overall_sum_time / overall_num_time)
 	overall_log = '|{}|[{}] All_All: {}'.format(datetime.now(), pra_pref, ' '.join(['{:.3f}'.format(x) for x in list(overall_loss_time) + [np.sum(overall_loss_time)/6.]]))
 	my_print_epoch(overall_log)
 	my_print(overall_log)
@@ -145,7 +145,7 @@ def compute_RMSE(pra_pred, pra_GT, pra_mask, pra_error_order=2):
 	pred = pra_pred * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
 	GT = pra_GT * pra_mask # (N, C, T, V)=(N, 2, 6, 120)
 	if pra_error_order ==2 :
-		x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1)**0.5 # x^2+y^2, (N, C, T, V)->(N, T, V)=(N, 6, 120)
+		x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1) # x^2+y^2, (N, C, T, V)->(N, T, V)=(N, 6, 120)
 	else :
 		x2y2 = torch.sum(torch.abs(pred - GT)**pra_error_order, dim=1)
 	overall_sum_time = x2y2.sum(dim=-1) # (N, T, V) -> (N, T)=(N, 6)
