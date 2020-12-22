@@ -99,5 +99,5 @@ class Feeder(torch.utils.data.Dataset):
 		#now_adjacency = self.graph.get_adjacency(self.all_adjacency[idx])
 		#now_A = self.graph.normalize_adjacency(now_adjacency)
 		
-		return rev_angle_mat, now_feature, self.all_adjacency[idx], now_mean_xy
+		return now_feature, self.all_adjacency[idx], now_mean_xy
 
