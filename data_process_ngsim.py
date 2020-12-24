@@ -9,7 +9,7 @@ import itertools
 import math
 
 # Please change this to your location
-data_root = 'NGSIM/'
+data_root = '/content/drive/MyDrive/trajectory-prediction-GRIP-current_approach_updated/data/'
 
 
 history_frames = 6 # 3 second * 2 frame/second
@@ -17,7 +17,7 @@ future_frames = 6 # 3 second * 2 frame/second
 total_frames = history_frames + future_frames
 # xy_range = 120 # max_x_range=121, max_y_range=118
 max_num_object = 400 # maximum number of observed objects is 70
-neighbor_distance = 10 # meter
+neighbor_distance = 20 # meter
 
 # NGSIM data format:
 # frame_id, object_id, object_type, position_x, position_y, object_length, pbject_width
@@ -62,6 +62,8 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	visible_object_value = np.array(list(pra_now_dict[pra_observed_last].values()))
 	xy = visible_object_value[:, 3:5].astype(float)
 	veh_class = visible_object_value[:,2]
+	lane = visible_object_value[:,7]
+	y_corr = visible_object_value[:,4]
 	mean_xy = np.zeros_like(visible_object_value[0], dtype=float)
 	m_xy = np.mean(xy, axis=0)
 	mean_xy[3:5] = m_xy
@@ -86,12 +88,23 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	# assign person class binary matrix
 	classi = np.zeros((max_num_object,max_num_object))
 	classj = np.zeros((max_num_object,max_num_object))
+	lanei = np.zeros((max_num_object,max_num_object))
+	lanej = np.zeros((max_num_object,max_num_object))
+	fronti = np.zeros((max_num_object,max_num_object))
+	frontj = np.zeros((max_num_object,max_num_object))
+	identity_matrix = np.zeros((num_visible_object, num_visible_object))
 	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
 		classi[i,j] = (veh_class[i]==3).astype(float)
 		classj[i,j] = (veh_class[j]==3).astype(float)
+		lanei[i,j] = ((lane[i]-lane[j])==1).astype(float)
+		lanej[i,j] = ((lane[j]-lane[i])==1).astype(float)
+		fronti[i,j] = ((y_corr[i]-y_corr[j])>0 and ((lane[i]-lane[j])==0)).astype(float)
+		frontj[i,j] = ((y_corr[j]-y_corr[i])>0 and ((lane[j]-lane[i])==0)).astype(float)
+		identity_matrix[i,j] = (i==j)
 	# Store the distances in a fixed size matrix (neighbour_matrix)
 	neighbor_matrix = np.zeros((max_num_object, max_num_object))
-	neighbor_matrix[:num_visible_object, :num_visible_object] = (dist_xy)
+	#identity_matrix = np.zeros((num_visible_object, num_visible_object))
+	neighbor_matrix[:num_visible_object, :num_visible_object] = (identity_matrix)
 	
 	now_all_object_id = set([val for x in range(pra_start_ind, pra_end_ind) for val in pra_now_dict[x].keys()])
 	non_visible_object_id_list = list(now_all_object_id - set(visible_object_id_list))
@@ -158,7 +171,7 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	total_avg_vel = data.sum(axis=0).sum(axis=-2)/new_mask.sum(axis=0).sum(axis=-2)
 	#print(total_avg_vel)
 	#print(object_frame_feature[0,history_frames-1,3:5]-object_frame_feature[0,history_frames-2,3:5])
-	return rev_angle_mat, object_frame_feature, np.array((neighbor_matrix,relx,rely,classi,classj,dist_mask)), m_xy
+	return rev_angle_mat, object_frame_feature, np.array((neighbor_matrix,fronti,frontj,lanei,lanej,dist_mask)), m_xy
 	
 
 def generate_train_data(pra_file_path):
@@ -242,39 +255,37 @@ def generate_test_data(pra_file_path):
 
 
 def generate_data(pra_file_path_list, pra_is_train=True):
-'''
-code to reshape and generate data for pkl file generation
-'''
-	all_data = []
-	all_adjacency = []
-	all_mean_xy = []
-	all_rev_angle_mat = []
-	for file_path in pra_file_path_list:
-		print(file_path)
-		if pra_is_train:
-			rev_angle_mat, now_data, now_adjacency, now_mean_xy = generate_train_data(file_path)
-		else:
-			rev_angle_mat, now_data, now_adjacency, now_mean_xy = generate_test_data(file_path)
-		all_data.extend(now_data)
-		all_adjacency.extend(now_adjacency)
-		all_mean_xy.extend(now_mean_xy)
-		all_rev_angle_mat.extend(rev_angle_mat)
+   
+    all_data = []
+    all_adjacency = []
+    all_mean_xy = []
+    all_rev_angle_mat = []
+    for file_path in pra_file_path_list:
+	    print(file_path)
+	    if pra_is_train:
+		    rev_angle_mat, now_data, now_adjacency, now_mean_xy = generate_train_data(file_path)
+	    else:
+		    rev_angle_mat, now_data, now_adjacency, now_mean_xy = generate_test_data(file_path)
+	    all_data.extend(now_data)
+	    all_adjacency.extend(now_adjacency)
+	    all_mean_xy.extend(now_mean_xy)
+	    all_rev_angle_mat.extend(rev_angle_mat)
 
-	all_data = np.array(all_data) #(N, C, T, V)=(5010, 11, 12, 70) Train
-	all_adjacency = np.array(all_adjacency) #(5010, 70, 70) Train
-	all_mean_xy = np.array(all_mean_xy) #(5010, 2) Train
-	all_rev_angle_mat = np.array(all_rev_angle_mat)
+    all_data = np.array(all_data) #(N, C, T, V)=(5010, 11, 12, 70) Train
+    all_adjacency = np.array(all_adjacency) #(5010, 70, 70) Train
+    all_mean_xy = np.array(all_mean_xy) #(5010, 2) Train
+    all_rev_angle_mat = np.array(all_rev_angle_mat)
 	# Train (N, C, T, V)=(5010, 11, 12, 70), (5010, 70, 70), (5010, 2)
 	# Test (N, C, T, V)=(415, 11, 6, 70), (415, 70, 70), (415, 2)
-	print(np.shape(all_rev_angle_mat),np.shape(all_data), np.shape(all_adjacency), np.shape(all_mean_xy))
-	x = [all_rev_angle_mat, all_data, all_adjacency, all_mean_xy]
+    print(np.shape(all_rev_angle_mat),np.shape(all_data), np.shape(all_adjacency), np.shape(all_mean_xy))
+    x = [all_rev_angle_mat, all_data, all_adjacency, all_mean_xy]
 	# save training_data and trainjing_adjacency into a file.
-	if pra_is_train:
-		save_path = 'train_data.pkl'
-	else:
-		save_path = 'test_data.pkl'
-	with open(save_path, 'wb') as writer:
-		pickle.dump(x, writer)
+    if pra_is_train:
+	    save_path = '/content/drive/MyDrive/trajectory-prediction-GRIP-current_approach_updated/train_data.pkl'
+    else:
+	    save_path = 'test_data.pkl'
+    with open(save_path, 'wb') as writer:
+	    pickle.dump(x, writer)
 		
 
 if __name__ == '__main__':
@@ -284,5 +295,6 @@ if __name__ == '__main__':
 	print('Generating Training Data.')
 	generate_data(train_file_path_list, pra_is_train=True)
 	
-	print('Generating Testing Data.')
-	generate_data(test_file_path_list, pra_is_train=False)
+	#print('Generating Testing Data.')
+	#generate_data(test_file_path_list, pra_is_train=False)
+
