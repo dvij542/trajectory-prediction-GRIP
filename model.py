@@ -14,11 +14,10 @@ class Model(nn.Module):
 
 		# load graph
 		self.graph = Graph(**graph_args)
-		# Initialise Adjacency Matrix
-		A = np.ones((7, graph_args['num_node'], graph_args['num_node']))
+		A = np.ones((6, graph_args['num_node'], graph_args['num_node']))
 
 		# build networks
-		spatial_kernel_size = 8
+		spatial_kernel_size = np.shape(A)[0]
 		temporal_kernel_size = 5 #9 #5 # 3
 		kernel_size = (temporal_kernel_size, spatial_kernel_size)
 
@@ -31,12 +30,12 @@ class Model(nn.Module):
 		))
 
 		# initialize parameters for edge importance weighting
-		# if edge_importance_weighting:
-		# 	self.edge_importance = nn.ParameterList(
-		# 		[nn.Parameter(torch.ones(np.shape(A))) for i in self.st_gcn_networks]
-		# 		)
-		# else:
-		# 	self.edge_importance = [1] * len(self.st_gcn_networks)
+		if edge_importance_weighting:
+			self.edge_importance = nn.ParameterList(
+				[nn.Parameter(torch.ones(np.shape(A))) for i in self.st_gcn_networks]
+				)
+		else:
+			self.edge_importance = [1] * len(self.st_gcn_networks)
 
 		self.num_node = num_node = self.graph.num_node
 		self.out_dim_per_node = out_dim_per_node = 2 #(x, y) coordinate
@@ -68,15 +67,14 @@ class Model(nn.Module):
 	def forward(self, pra_x, pra_A, pra_pred_length, pra_teacher_forcing_ratio=0, pra_teacher_location=None):
 		x = pra_x
 		
-		# forward
-		for gcn in self.st_gcn_networks:
+		# forwad
+		for gcn, importance in zip(self.st_gcn_networks, self.edge_importance):
 			if type(gcn) is nn.BatchNorm2d:
 				x = gcn(x)
 			else:
-				x, _ = gcn(x, pra_A)
+				x, _ = gcn(x, pra_A + importance)
 				
 		# prepare for seq2seq lstm model
-		# graph_conv_feature.shape = (N*V,T,C)
 		graph_conv_feature = self.reshape_for_lstm(x)
 		last_position = self.reshape_for_lstm(pra_x[:,:2]) #(N, C, T, V)[:, :2] -> (N, T, V*2) [(N*V, T, C)]
 
@@ -85,7 +83,6 @@ class Model(nn.Module):
 
 		# now_predict.shape = (N, T, V*C)
 		now_predict_car = self.seq2seq_car(in_data=graph_conv_feature, last_location=last_position[:,-1:,:], pred_length=pra_pred_length, teacher_forcing_ratio=pra_teacher_forcing_ratio, teacher_location=pra_teacher_location)
-		# Return back the result in (N,5,T,V) form
 		now_predict_car = self.reshape_from_lstm(now_predict_car) # (N, C, T, V)
 
 		now_predict_human = self.seq2seq_human(in_data=graph_conv_feature, last_location=last_position[:,-1:,:], pred_length=pra_pred_length, teacher_forcing_ratio=pra_teacher_forcing_ratio, teacher_location=pra_teacher_location)
