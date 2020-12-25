@@ -101,3 +101,5 @@ class Feeder(torch.utils.data.Dataset):
 		
 		return now_feature, self.all_adjacency[idx], now_mean_xy
 
+
+	
