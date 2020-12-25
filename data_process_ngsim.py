@@ -11,7 +11,6 @@ import math
 # Please change this to your location
 data_root = 'NGSIM/'
 
-
 history_frames = 6 # 3 second * 2 frame/second
 future_frames = 6 # 3 second * 2 frame/second
 total_frames = history_frames + future_frames
@@ -62,6 +61,7 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	visible_object_value = np.array(list(pra_now_dict[pra_observed_last].values()))
 	xy = visible_object_value[:, 3:5].astype(float)
 	veh_class = visible_object_value[:,2]
+	lane = visible_object_value[:,7:8]
 	mean_xy = np.zeros_like(visible_object_value[0], dtype=float)
 	m_xy = np.mean(xy, axis=0)
 	mean_xy[3:5] = m_xy
@@ -87,8 +87,13 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	classi = np.zeros((max_num_object,max_num_object))
 	classj = np.zeros((max_num_object,max_num_object))
 	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
-		classi[i,j] = (veh_class[i]==3).astype(float)
-		classj[i,j] = (veh_class[j]==3).astype(float)
+		classi[i,j] = (veh_class[i]==2).astype(float)
+		classj[i,j] = (veh_class[j]==2).astype(float)
+	lanei = np.zeros((max_num_object,max_num_object))
+	lanej = np.zeros((max_num_object,max_num_object))
+	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
+		lanei[i,j] = lane[i].astype(float)
+		lanej[i,j] = lane[j].astype(float)
 	# Store the distances in a fixed size matrix (neighbour_matrix)
 	neighbor_matrix = np.zeros((max_num_object, max_num_object))
 	neighbor_matrix[:num_visible_object, :num_visible_object] = (dist_xy)
@@ -105,15 +110,12 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 		# we add mark "1" to the end of each row to indicate that this row exists, using list(pra_now_dict[frame_ind][obj_id])+[1] 
 		# -mean_xy is used to zero_centralize data
 		# now_frame_feature_dict = {obj_id : list(pra_now_dict[frame_ind][obj_id]-mean_xy)+[1] for obj_id in pra_now_dict[frame_ind] if obj_id in visible_object_id_list}
-		print(frame_ind)
 		now_frame_feature_dict = {obj_id : (list(pra_now_dict[frame_ind][obj_id]-mean_xy)+[1] if obj_id in visible_object_id_list else list(pra_now_dict[frame_ind][obj_id]-mean_xy)+[0]) for obj_id in pra_now_dict[frame_ind] }
 		# if the current object is not at this frame, we return all 0s by using dict.get(_, np.zeros(11))
 		now_frame_feature = np.array([now_frame_feature_dict.get(vis_id, np.zeros(total_feature_dimension)) for vis_id in visible_object_id_list+non_visible_object_id_list])
 		object_feature_list.append(now_frame_feature)
 
 	# object_feature_list has shape of (frame#, object#, 11) 11 = 10features + 1mark
-	
-	print((object_feature_list))
 	object_feature_list = np.array(object_feature_list)
 	
 	# object feature with a shape of (frame#, object#, 11) -> (object#, frame#, 11)
@@ -158,7 +160,7 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	total_avg_vel = data.sum(axis=0).sum(axis=-2)/new_mask.sum(axis=0).sum(axis=-2)
 	#print(total_avg_vel)
 	#print(object_frame_feature[0,history_frames-1,3:5]-object_frame_feature[0,history_frames-2,3:5])
-	return rev_angle_mat, object_frame_feature, np.array((neighbor_matrix,relx,rely,classi,classj,dist_mask)), m_xy
+	return rev_angle_mat, object_frame_feature, np.array((neighbor_matrix,relx,rely,classi,classj,lanei,lanej,dist_mask)), m_xy
 	
 
 def generate_train_data(pra_file_path):
@@ -178,23 +180,28 @@ def generate_train_data(pra_file_path):
 	all_adjacency_list = []
 	all_mean_list = []
 	rev_angle_mat_list = []
-	for start_ind in frame_id_set[:2000:total_frames]:
+	for start_ind in frame_id_set[:4000:total_frames]:
 		print(start_ind, '/', len(frame_id_set)*5)
 		start_ind = int(start_ind)
 		end_ind = int(start_ind + 5*total_frames)
 		observed_last = start_ind + 5*(history_frames - 1)
 		rev_angle_mat, object_frame_feature, neighbor_matrix, mean_xy = process_data(now_dict, start_ind, end_ind, observed_last)
+		
+		
 
 		all_feature_list.append(object_frame_feature)
 		all_adjacency_list.append(neighbor_matrix)	
 		all_mean_list.append(mean_xy)	
 		rev_angle_mat_list.append(rev_angle_mat)
+	
 	# (N, V, T, C) --> (N, C, T, V)
 	all_feature_list = np.transpose(all_feature_list, (0, 3, 2, 1))
 	rev_angle_mat_list = np.array(rev_angle_mat_list)
 	
 	all_adjacency_list = np.array(all_adjacency_list)
 	all_mean_list = np.array(all_mean_list)
+	print(rev_angle_mat_list.shape)
+	print(all_adjacency_list.shape)
 	# print(all_feature_list.shape, all_adjacency_list.shape)
 	return rev_angle_mat_list, all_feature_list, all_adjacency_list, all_mean_list
 
@@ -242,9 +249,6 @@ def generate_test_data(pra_file_path):
 
 
 def generate_data(pra_file_path_list, pra_is_train=True):
-'''
-code to reshape and generate data for pkl file generation
-'''
 	all_data = []
 	all_adjacency = []
 	all_mean_xy = []
@@ -285,4 +289,4 @@ if __name__ == '__main__':
 	generate_data(train_file_path_list, pra_is_train=True)
 	
 	print('Generating Testing Data.')
-	generate_data(test_file_path_list, pra_is_train=False)
+	#generate_data(test_file_path_list, pra_is_train=False)
