@@ -32,7 +32,7 @@ future_frames = 6 # 3 second * 2 frame/second
 batch_size_train = 8
 batch_size_val = 8
 batch_size_test = 1
-total_epoch = 300
+total_epoch = 150
 base_lr = 0.01
 lr_decay_epoch = 5
 dev = 'cuda:0' 
@@ -108,7 +108,8 @@ def preprocess_data(pra_data, pra_rescale_xy):
 
 	# pra_data: (N, C, T, V)
 	# C = 8: [frame_id, object_id, object_type, position_x, position_y, object_length, pbject_width, lane] + [mask]	
-	feature_id = [3, 4, 2, 7, 8]
+	#feature_id = [3, 4, 2, 7, 8]
+	feature_id = [3, 4, 2, 8]
 	ori_data = pra_data[:,feature_id].detach()
 	data = ori_data.detach().clone()
 
@@ -183,7 +184,7 @@ def train_model(pra_model, pra_data_loader, pra_optimizer, pra_epoch_log):
 			########################################################
 			# We use abs to compute loss to backward update weights
 			# (N, T), (N, T)
-			overall_sum_time, overall_num, _ = compute_RMSE(predicted, output_loc_GT, output_mask, pra_error_order=1)
+			overall_sum_time, overall_num, _ = compute_RMSE(predicted, output_loc_GT, output_mask, pra_error_order=2)
 			# overall_loss
 			total_loss = torch.sum(overall_sum_time) / torch.max(torch.sum(overall_num), torch.ones(1,).to(dev)) #(1,)
 
@@ -390,7 +391,7 @@ def run_test(pra_model, pra_data_path):
 
 if __name__ == '__main__':
 	graph_args={'max_hop':1, 'num_node':400}
-	model = Model(in_channels=5, graph_args=graph_args, edge_importance_weighting=True)
+	model = Model(in_channels=4, graph_args=graph_args, edge_importance_weighting=True)
 	model.to(dev)
 
 	#pretrained_model_path = '/content/drive/MyDrive/trajectory-prediction-GRIP-current_approach/trained_models/model_epoch_0049.pt'
@@ -400,6 +401,3 @@ if __name__ == '__main__':
 	
 	# run_test(model, './test_data.pkl')
 	
-		
-		
-
