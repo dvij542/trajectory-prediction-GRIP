@@ -9,7 +9,7 @@ class Graph():
 		4. normalized_A = graph.normalize_adjacency(A)
 	"""
 	def __init__(self,
-				 num_node = 120,
+				 num_node = 400,
 				 max_hop = 1
 				 ):
 		self.max_hop = max_hop
