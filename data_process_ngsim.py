@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/usr/local/envs/sc-glstm/lib/python3.7/site-packages')
+sys.path.append('/content/drive/MyDrive/trajectory-prediction-GRIP-current_approach_updated/')
 import numpy as np 
 import glob
 import os 
@@ -17,7 +17,7 @@ future_frames = 6 # 3 second * 2 frame/second
 total_frames = history_frames + future_frames
 # xy_range = 120 # max_x_range=121, max_y_range=118
 max_num_object = 400 # maximum number of observed objects is 70
-neighbor_distance = 20 # meter
+neighbor_distance = 30 # meter
 
 # NGSIM data format:
 # frame_id, object_id, object_type, position_x, position_y, object_length, pbject_width
@@ -94,13 +94,15 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	frontj = np.zeros((max_num_object,max_num_object))
 	identity_matrix = np.zeros((num_visible_object, num_visible_object))
 	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
-		classi[i,j] = (veh_class[i]==3).astype(float)
-		classj[i,j] = (veh_class[j]==3).astype(float)
+		classi[i,j] = (veh_class[i]==2).astype(float)
+		classj[i,j] = (veh_class[j]==2).astype(float)
 		lanei[i,j] = ((lane[i]-lane[j])==1).astype(float)
 		lanej[i,j] = ((lane[j]-lane[i])==1).astype(float)
 		fronti[i,j] = ((y_corr[i]-y_corr[j])>0 and ((lane[i]-lane[j])==0)).astype(float)
 		frontj[i,j] = ((y_corr[j]-y_corr[i])>0 and ((lane[j]-lane[i])==0)).astype(float)
 		identity_matrix[i,j] = (i==j)
+	for i,j in itertools.product(range(xy.shape[0]),range(xy.shape[0])) :
+	    dist_mask = (dist_mask[i,j]-identity_matrix[i,j]).astype(float)
 	# Store the distances in a fixed size matrix (neighbour_matrix)
 	neighbor_matrix = np.zeros((max_num_object, max_num_object))
 	#identity_matrix = np.zeros((num_visible_object, num_visible_object))
@@ -171,7 +173,7 @@ def process_data(pra_now_dict, pra_start_ind, pra_end_ind, pra_observed_last):
 	total_avg_vel = data.sum(axis=0).sum(axis=-2)/new_mask.sum(axis=0).sum(axis=-2)
 	#print(total_avg_vel)
 	#print(object_frame_feature[0,history_frames-1,3:5]-object_frame_feature[0,history_frames-2,3:5])
-	return rev_angle_mat, object_frame_feature, np.array((neighbor_matrix,fronti,frontj,lanei,lanej,dist_mask)), m_xy
+	return rev_angle_mat, object_frame_feature, np.array((neighbor_matrix,dist_mask)), m_xy
 	
 
 def generate_train_data(pra_file_path):
@@ -191,7 +193,7 @@ def generate_train_data(pra_file_path):
 	all_adjacency_list = []
 	all_mean_list = []
 	rev_angle_mat_list = []
-	for start_ind in frame_id_set[:2000:total_frames]:
+	for start_ind in frame_id_set[:4000:total_frames]:
 		print(start_ind, '/', len(frame_id_set)*5)
 		start_ind = int(start_ind)
 		end_ind = int(start_ind + 5*total_frames)
@@ -297,4 +299,3 @@ if __name__ == '__main__':
 	
 	#print('Generating Testing Data.')
 	#generate_data(test_file_path_list, pra_is_train=False)
-
