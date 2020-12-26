@@ -14,7 +14,7 @@ class Model(nn.Module):
 
 		# load graph
 		self.graph = Graph(**graph_args)
-		A = np.ones((6, graph_args['num_node'], graph_args['num_node']))
+		A = np.ones((2, graph_args['num_node'], graph_args['num_node']))
 
 		# build networks
 		spatial_kernel_size = np.shape(A)[0]
