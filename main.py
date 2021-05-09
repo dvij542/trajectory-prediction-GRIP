@@ -31,8 +31,8 @@ max_y = 1.
 history_frames = 6 # 3 second * 2 frame/second
 future_frames = 6 # 3 second * 2 frame/second
 
-batch_size_train = 8
-batch_size_val = 4
+batch_size_train = 4
+batch_size_val = 2
 batch_size_test = 1
 total_epoch = 50
 base_lr = 0.01
