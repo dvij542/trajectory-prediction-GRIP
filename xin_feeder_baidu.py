@@ -34,7 +34,7 @@ class Feeder(torch.utils.data.Dataset):
 			with open(self.data_path, 'rb') as reader:
 			# Training (N, C, T, V)=(5010, 11, 12, 120), (5010, 120, 120), (5010, 2)
 				[rev_angle_mat, all_feature, all_adjacency, all_mean_xy]= pickle.load(reader)
-			
+				print(all_adjacency.shape)
 		total_num = len(all_feature)
 		# equally choose validation set
 		#train_id_list = list(np.linspace(0, total_num-1, int(total_num*0.8)).astype(int))
@@ -66,15 +66,14 @@ class Feeder(torch.utils.data.Dataset):
 		with open(self.data_path, 'rb') as reader:
 			# Training (N, C, T, V)=(*, 7, 12, 120), (*, 120, 120), (*, 2)
 			[self.rev_angle_mat, all_feature, all_adjacency, all_mean_xy]= pickle.load(reader)
-			
 
 	def __len__(self):
 		return len(self.all_feature)
 
 	def __getitem__(self, idx):
 		# C = 11: [frame_id, object_id, object_type, position_x, position_y, position_z, object_length, pbject_width, pbject_height, heading] + [mask]
-		now_feature = self.all_feature[idx].copy() # (C, T, V) = (7, 12, 120)
-		now_mean_xy = self.all_mean_xy[idx].copy() # (2,) = (x, y) 
+		now_feature =   self.all_feature[idx].copy() # (C, T, V) = (7, 12, 120)
+		now_mean_xy =   self.all_mean_xy[idx].copy() # (2,) = (x, y) 
 		rev_angle_mat = self.rev_angle_mat[idx].copy()
 		# Create more data by rotating x and y coordinates of all the vehicles at all time steps by a random amount 
 		if self.train_val_test.lower() == 'train' and np.random.random()>1:
@@ -98,7 +97,23 @@ class Feeder(torch.utils.data.Dataset):
 
 		#now_adjacency = self.graph.get_adjacency(self.all_adjacency[idx])
 		#now_A = self.graph.normalize_adjacency(now_adjacency)
-		
+		# mask = self.all_adjacency[idx][7]
+		# print(f"type of mask = {type(mask)}")
+		# # print(self.all_adjacency[idx].shape)
+		# index = np.nonzero(mask)
+		# index=np.vstack(index)
+		# # print(index)
+		# # print(range(index.shape[1]))
+		# edge_attr = np.array([self.all_adjacency[idx][:7, index[0][i] , index[1][i] ] for i in range(index.shape[1])])
+		# for i in range(index.shape[1]):
+		# 	# 	print(self.all_adjacency[idx][0:2][ index[0][i] ][ index[1][i]].shape)
+		# 	print(self.all_adjacency[idx][:7][0].shape)
+		# print(edge_attr.shape)
+		# print(self.all_adjacency[idx][:7][ index[0][i] ].shape)
+		# print(np.count_nonzero(mask))
+		# print(mask.shape)
+		# print(index.shape)
+		# print(edge_attr.shape)
 		return now_feature, self.all_adjacency[idx], now_mean_xy
 
 

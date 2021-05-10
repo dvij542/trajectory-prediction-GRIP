@@ -37,7 +37,8 @@ batch_size_test = 1
 total_epoch = 50
 base_lr = 0.01
 lr_decay_epoch = 5
-dev = 'cuda:0' 
+# dev = 'cuda:0' 
+dev = 'cuda:0' if torch.cuda.is_available() else "cpu"
 work_dir = '../trained_models'
 log_file = os.path.join(work_dir,'log_test.txt')
 log_file_epoch = os.path.join(work_dir,'log_test_epoch.txt')
@@ -89,6 +90,8 @@ def my_load_model(pra_model, pra_path):
 # custom dataloader and dataset class
 def data_loader(pra_path, pra_batch_size=128, pra_shuffle=False, pra_drop_last=False, train_val_test='train'):
 	feeder = Feeder(data_path=pra_path, graph_args=graph_args, train_val_test=train_val_test)
+	print(f"first adj matrix")
+	feeder[0]
 	loader = torch.utils.data.DataLoader(
 		dataset=feeder,
 		batch_size=pra_batch_size,
@@ -380,8 +383,8 @@ if __name__ == '__main__':
 	model = Model(in_channels=4, graph_args=graph_args, edge_importance_weighting=True)
 	model.to(dev)
 
-	pretrained_model_path = '../trained_models/model_epoch_0049.pt'
-	model = my_load_model(model, pretrained_model_path)
+	# pretrained_model_path = './trained_models/model_epoch_0049.pt'
+	# model = my_load_model(model, pretrained_model_path).to(dev)
 	# train and evaluate model
 	run_trainval(model, pra_traindata_path='train_data.pkl', pra_testdata_path='test_data.pkl')
 	
