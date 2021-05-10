@@ -66,7 +66,7 @@ class ConvTemporalGraphical(nn.Module):
 		m, n = x.shape[0], x.shape[3]
 		x_reshaped = x.reshape(m, -1, n)
 		datalist = []
-		# print(x_reshaped.shape)
+		print(x_reshaped.shape)
 		# print(A.shape)
 		# print("XXXXXXXXXXXXXX")
 		for i in range(A.shape[0]):
@@ -83,10 +83,11 @@ class ConvTemporalGraphical(nn.Module):
 			data = Data(x=torch.transpose(x_reshaped[i].detach(
 			).cpu(), 0, 1), edge_index=index, edge_attr=edge_attr)
 			datalist.append(data)
+			# print(data.x.shape)
 		train_loader = DataLoader(
 			datalist, batch_size=x.shape[0], shuffle=True)
 		data1 = next(iter(train_loader)).to("cuda:0")
-		# print(data1.x.shape)
+		print(data1.x.shape)
 		# print(data1.edge_index[0])
 		# print(data1.batch)
 		# print(data1.batch.shape)
@@ -109,15 +110,19 @@ class ConvTemporalGraphical(nn.Module):
 		print("starting conv2")
 		x, A = self.conv2(data1,mask)  #########CALL TO NEW CONV LAYER
 		print("YESSSS")
+		print(x.shape)
+		x=x.reshape(8,x.shape[0]//8,64,6).permute(0,2,3,1)
+		print(x.shape)
 		# A is (n,8,v,v)
 		# A = self.adjmatder(A[:, :7])
 		A = A*mask
-
+		print(A.shape)
 		# Dl = ((A.sum(axis=2) + 0.001)**(-1)).float()
 		# Dl is (n,64,v)
 		# A = torch.einsum('ncvw,ncw->ncvw',(A,Dl))
 
 		# To increase the no of channels of the graph to out_channels*k
+		# ,64,6,400
 		n, c, t, v = x.size()
 		# x is now a 5d tensor with size (N,k,c,t,v)
 		x = x.view(n, c, t, v)
@@ -183,20 +188,29 @@ class anim_conv(nn.Module):
 	def __init__(self, in_channels, out_channels, kernel_size, t_kernel_size=1, t_stride=1, t_padding=0, t_dilation=1, bias=True):
 		super().__init__()
 		self.kernel_size = kernel_size
+		
 		self.edge_in_dim = 7  # check this
 		self.edge_fc_dims = [14, 14]  # check this
-		self.edge_out_dim = 7  # check this
-		self.node_in_dim = 24  # check this
+		self.edge_out_dim = 63  # check this
+		if(in_channels==4):
+			self.node_in_dim = 24  # check this
+		else: 
+			self.node_in_dim=384
 		self.node_fc_dims = [36, 36]  # check this
-		self.node_out_dim = 24  # check this
+		if(in_channels==4):
+			self.node_out_dim = 24  # check this
+		else: 
+			self.node_out_dim=384
 		self.dropout_p = 0.25  # checkthis
 		self.training = True  # add an option for this
 		self.edge_mlp = anim_MLP(input_dim=self.edge_in_dim, fc_dims=list(self.edge_fc_dims) + [self.edge_out_dim],
 								 dropout_p=self.dropout_p, use_batchnorm=True)
 		self.node_mlp = anim_MLP(input_dim=self.node_in_dim, fc_dims=list(self.node_fc_dims) + [self.node_out_dim],
 								 dropout_p=self.dropout_p, use_batchnorm=True)
+		
 		print(f"inchannels and out channels: {in_channels},{out_channels}")
-		self.convs = pyg_nn.GatedGraphConv(out_channels=out_channels,num_layers=2)
+		# self.convs = pyg_nn.GatedGraphConv(out_channels=out_channels,num_layers=2)
+		self.convs = pyg_nn.GatedGraphConv(out_channels=384,num_layers=2)
 		# self.conv1 = nn.Conv2d(
 		# 	in_channels,
 		# 	out_channels,
@@ -209,6 +223,8 @@ class anim_conv(nn.Module):
 	def forward(self, data,mask):
 		# data = get_data(A)
 		x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
+		print(f"shape of node features before {x.shape}")
+		# x=x.reshape(x.shape[0],)
 		edge_features = self.edge_mlp(edge_attr)
 		print(f"shape of edge features {edge_features.shape}")
 		node_features = self.node_mlp(x)
