@@ -226,16 +226,8 @@ class anim_conv(nn.Module):
 			edge_index=edge_index, batch=batch, edge_attr=edge_features, max_num_nodes=400)
 		A_new = A_new.permute(0, 3, 1, 2).to('cuda:0')
 		A_new = torch.cat((A_new, mask), 1)
-		print(A_new.shape)
-		# print(A_new.shape)
-
-		# dvij's method
-		# print(node_features.shape)
-		# n, c, t, v = node_features.size()
-		# node_features.view(n, c, t, v)
-		# node_features = torch.einsum(
-		# 	'nctv,ncvw->nctw', (node_features, A_new))
-		# return x.contiguous(), A_new
+		print(node_features.shape,A_new.shape)
+		return node_features,A_new
 		####################
 
 # possible template for implementing gated graph conv on own###################################################3
