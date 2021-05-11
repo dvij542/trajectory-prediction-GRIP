@@ -5,6 +5,13 @@ import torch.nn.functional as F
 import torch_geometric.utils as pyg_utils
 from torch_geometric.data import Data, DataLoader
 
+from torch_geometric.typing import Adj, OptTensor
+from torch import Tensor
+from torch.nn import Parameter as Param
+from torch_sparse import SparseTensor, matmul
+from torch_geometric.nn.conv import MessagePassing,GatedGraphConv
+
+
 
 ###################################old code with some changes :( ##########################################
 class ConvTemporalGraphical(nn.Module):
@@ -66,7 +73,7 @@ class ConvTemporalGraphical(nn.Module):
 		m, n = x.shape[0], x.shape[3]
 		x_reshaped = x.reshape(m, -1, n)
 		datalist = []
-		print(x_reshaped.shape)
+		# print(x_reshaped.shape)
 		# print(A.shape)
 		# print("XXXXXXXXXXXXXX")
 		for i in range(A.shape[0]):
@@ -87,7 +94,7 @@ class ConvTemporalGraphical(nn.Module):
 		train_loader = DataLoader(
 			datalist, batch_size=x.shape[0], shuffle=True)
 		data1 = next(iter(train_loader)).to("cuda:0")
-		print(data1.x.shape)
+		# print(data1.x.shape)
 		# print(data1.edge_index[0])
 		# print(data1.batch)
 		# print(data1.batch.shape)
@@ -96,7 +103,7 @@ class ConvTemporalGraphical(nn.Module):
 			edge_index=data1.edge_index, batch=data1.batch, edge_attr=data1.edge_attr, max_num_nodes=400)
 		new_a = new_a.permute(0, 3, 1, 2).to('cuda:0')
 		new_a = torch.cat((new_a, mask), 1)
-		print(new_a.shape)
+		# print(new_a.shape)
 
 		# for data in train_loader:  # Iterate in batches over the training dataset.
 		# 	out = model(data.x, data.edge_index, data.batch)  # Perform a single forward pass.
@@ -111,7 +118,7 @@ class ConvTemporalGraphical(nn.Module):
 		x, A = self.conv2(data1,mask)  #########CALL TO NEW CONV LAYER
 		# print("YESSSS")
 		# print(x.shape)
-		x=x.reshape(8,x.shape[0]//8,64,6).permute(0,2,3,1)
+		x=x.reshape(A.shape[0],x.shape[0]//A.shape[0],64,6).permute(0,2,3,1)
 		# print(x.shape)
 		# A is (n,8,v,v)
 		# A = self.adjmatder(A[:, :7])
@@ -145,10 +152,10 @@ class anim_MLP(nn.Module):
 
 		assert isinstance(fc_dims, (list, tuple)), 'fc_dims must be either a list or a tuple, but got {}'.format(
 			type(fc_dims))
-		print(type(input_dim),input_dim)
+		# print(type(input_dim),input_dim)
 		layers = []
 		for dim in fc_dims:
-			print(f"trying to append {input_dim,dim}")
+			# print(f"trying to append {input_dim,dim}")
 			layers.append(nn.Linear(input_dim, dim))
 			if use_batchnorm and dim != 1:
 				layers.append(nn.BatchNorm1d(dim))
@@ -191,7 +198,10 @@ class anim_conv(nn.Module):
 		
 		self.edge_in_dim = 7  # check this
 		self.edge_fc_dims = [14, 14]  # check this
-		self.edge_out_dim = 63  # check this
+		self.edge_out_dim = 384  # check this
+		self.edge_in_dim1 = 384  # check this
+		self.edge_fc_dims1 = [128]  # check this
+		self.edge_out_dim1 = 64  # check this
 		if(in_channels==4):
 			self.node_in_dim = 24  # check this
 		else: 
@@ -205,12 +215,15 @@ class anim_conv(nn.Module):
 		self.training = True  # add an option for this
 		self.edge_mlp = anim_MLP(input_dim=self.edge_in_dim, fc_dims=list(self.edge_fc_dims) + [self.edge_out_dim],
 								 dropout_p=self.dropout_p, use_batchnorm=True)
+		self.edge_mlp1 = anim_MLP(input_dim=self.edge_in_dim1, fc_dims=list(self.edge_fc_dims1) + [self.edge_out_dim1],
+								 dropout_p=self.dropout_p, use_batchnorm=True)
 		self.node_mlp = anim_MLP(input_dim=self.node_in_dim, fc_dims=list(self.node_fc_dims) + [self.node_out_dim],
 								 dropout_p=self.dropout_p, use_batchnorm=True)
 		
-		print(f"inchannels and out channels: {in_channels},{out_channels}")
+		# print(f"inchannels and out channels: {in_channels},{out_channels}")
 		# self.convs = pyg_nn.GatedGraphConv(out_channels=out_channels,num_layers=2)
-		self.convs = pyg_nn.GatedGraphConv(out_channels=384,num_layers=2)
+		# self.convs = pyg_nn.GatedGraphConv(out_channels=384,num_layers=2)
+		self.convs = GatedGraphConv_parv(out_channels=384,num_layers=2)
 		# self.conv1 = nn.Conv2d(
 		# 	in_channels,
 		# 	out_channels,
@@ -225,29 +238,109 @@ class anim_conv(nn.Module):
 		x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
 		# print(f"shape of node features before {x.shape}")
 		# x=x.reshape(x.shape[0],)
+		# print(f"shape of edge index {edge_index.shape}")
+		# print(f"shape of edge features before {edge_attr.shape}")
 		edge_features = self.edge_mlp(edge_attr)
-		# print(f"shape of edge features {edge_features.shape}")
+		# print(f"shape of edge features after {edge_features.shape}")
 		node_features = self.node_mlp(x)
 		# print(f"shape of node features before conv1 {node_features.shape}")
 		# node_features=self.conv1(node_features)
 		# print(f"shape of node features after conv1 {node_features.shape}")
 		# print(f"shape of node features {node_features.shape}, before {x.shape}")
 		node_features = self.convs(
-			x=node_features, edge_index=edge_index)
+			x=node_features, edge_index=edge_index, edge_weight = edge_features)
 		node_features = F.relu(node_features)
 		node_features = F.dropout(
 			node_features, p=self.dropout_p, training=self.training)
+		edge_features = self.edge_mlp1(edge_features)
 		# A_new = from_edge_idx(edge_index, edge_features, batch)
 		A_new = pyg_utils.to_dense_adj(
 			edge_index=edge_index, batch=batch, edge_attr=edge_features, max_num_nodes=400)
 		A_new = A_new.permute(0, 3, 1, 2).to('cuda:0')
-		A_new = torch.cat((A_new, mask), 1)
-		print(node_features.shape,A_new.shape)
+		# A_new = A_new * mask
+		# A_new = torch.cat((A_new, mask), 1)
+		# print(node_features.shape,A_new.shape)
 		return node_features,A_new
 		####################
 
 # possible template for implementing gated graph conv on own###################################################3
 
+
+class GatedGraphConv_parv(GatedGraphConv):
+	r"""The gated graph convolution operator from the `"Gated Graph Sequence
+	Neural Networks" <https://arxiv.org/abs/1511.05493>`_ paper
+
+	.. math::
+		\mathbf{h}_i^{(0)} &= \mathbf{x}_i \, \Vert \, \mathbf{0}
+
+		\mathbf{m}_i^{(l+1)} &= \sum_{j \in \mathcal{N}(i)} e_{j,i} \cdot
+		\mathbf{\Theta} \cdot \mathbf{h}_j^{(l)}
+
+		\mathbf{h}_i^{(l+1)} &= \textrm{GRU} (\mathbf{m}_i^{(l+1)},
+		\mathbf{h}_i^{(l)})
+
+	up to representation :math:`\mathbf{h}_i^{(L)}`.
+	The number of input channels of :math:`\mathbf{x}_i` needs to be less or
+	equal than :obj:`out_channels`.
+	:math:`e_{j,i}` denotes the edge weight from source node :obj:`j` to target
+	node :obj:`i` (default: :obj:`1`)
+
+	Args:
+		out_channels (int): Size of each input sample.
+		num_layers (int): The sequence length :math:`L`.
+		aggr (string, optional): The aggregation scheme to use
+			(:obj:`"add"`, :obj:`"mean"`, :obj:`"max"`).
+			(default: :obj:`"add"`)
+		bias (bool, optional): If set to :obj:`False`, the layer will not learn
+			an additive bias. (default: :obj:`True`)
+		**kwargs (optional): Additional arguments of
+			:class:`torch_geometric.nn.conv.MessagePassing`.
+	"""
+	def __init__(self, out_channels: int, num_layers: int, aggr: str = 'add',
+				 bias: bool = True, **kwargs):
+		super(GatedGraphConv_parv, self).__init__(out_channels = out_channels, num_layers= num_layers , aggr=aggr, bias= bias, **kwargs)
+
+		# self.out_channels = out_channels
+		# self.num_layers = num_layers
+
+		# self.weight = Param(Tensor(num_layers, out_channels, out_channels))
+		# self.rnn = torch.nn.GRUCell(out_channels, out_channels, bias=bias)
+
+		# self.reset_parameters()
+
+	# def reset_parameters(self):
+	# 	uniform(self.out_channels, self.weight)
+	# 	self.rnn.reset_parameters()
+
+
+	# def forward(self, x: Tensor, edge_index: Adj,
+	# 			edge_weight: OptTensor = None) -> Tensor:
+	# 	""""""
+	# 	if x.size(-1) > self.out_channels:
+	# 		raise ValueError('The number of input channels is not allowed to '
+	# 						 'be larger than the number of output channels')
+
+	# 	if x.size(-1) < self.out_channels:
+	# 		zero = x.new_zeros(x.size(0), self.out_channels - x.size(-1))
+	# 		x = torch.cat([x, zero], dim=1)
+
+	# 	for i in range(self.num_layers):
+	# 		m = torch.matmul(x, self.weight[i])
+	# 		# propagate_type: (x: Tensor, edge_weight: OptTensor)
+	# 		m = self.propagate(edge_index, x=m, edge_weight=edge_weight,
+	# 						   size=None)
+	# 		x = self.rnn(m, x)
+
+	# 	return x
+
+
+	def message(self, x_j: Tensor, edge_weight: OptTensor):
+		# if edge_weight is not None:
+		# 	print("hiiii")
+		# 	print(x_j.shape)
+		# 	print(edge_weight.shape)
+		# return x_j if edge_weight is None else edge_weight.view(-1, 1) * x_j
+		return x_j if edge_weight is None else edge_weight * x_j
 
 # class GAT(pyg_nn.MessagePassing):
 # 	'''

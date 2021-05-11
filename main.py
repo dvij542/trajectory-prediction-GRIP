@@ -31,14 +31,14 @@ max_y = 1.
 history_frames = 6 # 3 second * 2 frame/second
 future_frames = 6 # 3 second * 2 frame/second
 
-batch_size_train = 8
+batch_size_train = 20
 batch_size_val = 4
 batch_size_test = 1
 total_epoch = 50
 base_lr = 0.01
 lr_decay_epoch = 5
 # dev = 'cuda:0' 
-dev = 'cuda:0' if torch.cuda.is_available() else "cpu"
+dev = 'cuda' if torch.cuda.is_available() else "cpu"
 work_dir = '../trained_models'
 log_file = os.path.join(work_dir,'log_test.txt')
 log_file_epoch = os.path.join(work_dir,'log_test_epoch.txt')
