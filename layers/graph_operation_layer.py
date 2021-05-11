@@ -11,6 +11,8 @@ from torch.nn import Parameter as Param
 from torch_sparse import SparseTensor, matmul
 from torch_geometric.nn.conv import MessagePassing,GatedGraphConv
 
+import numpy as np
+
 
 
 ###################################old code with some changes :( ##########################################
@@ -59,7 +61,7 @@ class ConvTemporalGraphical(nn.Module):
 
 	def forward(self, x, A):
 		assert A.size(1) == self.kernel_size
-		# A is (n,64,v,v)
+		# A is (n,8,v,v)
 		mask = A[:, 7:]
 
 		########TODO##############
@@ -73,20 +75,14 @@ class ConvTemporalGraphical(nn.Module):
 		m, n = x.shape[0], x.shape[3]
 		x_reshaped = x.reshape(m, -1, n)
 		datalist = []
-		# print(x_reshaped.shape)
-		# print(A.shape)
-		# print("XXXXXXXXXXXXXX")
 		for i in range(A.shape[0]):
 			hello = torch.reshape(mask[i], (400, 400))
-			# print(hello.shape)
 			index = torch.nonzero(hello, as_tuple=True)
 			index = torch.vstack(index).detach().cpu()
-			# print(index.shape)
 			Ab = A.detach().cpu().numpy()
 			edge_attr = torch.tensor(
 				[Ab[i, :7, index[0][m], index[1][m]] for m in range(index.shape[1])])
-			# print(edge_attr.shape)
-			# print("XXXXXXXXXXXXXX")
+
 			data = Data(x=torch.transpose(x_reshaped[i].detach(
 			).cpu(), 0, 1), edge_index=index, edge_attr=edge_attr)
 			datalist.append(data)
@@ -94,23 +90,10 @@ class ConvTemporalGraphical(nn.Module):
 		train_loader = DataLoader(
 			datalist, batch_size=x.shape[0], shuffle=True)
 		data1 = next(iter(train_loader)).to("cuda:0")
-		# print(data1.x.shape)
-		# print(data1.edge_index[0])
-		# print(data1.batch)
-		# print(data1.batch.shape)
-		# print(data1.batch[data1.edge_index[0]])
 		new_a = pyg_utils.to_dense_adj(
 			edge_index=data1.edge_index, batch=data1.batch, edge_attr=data1.edge_attr, max_num_nodes=400)
 		new_a = new_a.permute(0, 3, 1, 2).to('cuda:0')
 		new_a = torch.cat((new_a, mask), 1)
-		# print(new_a.shape)
-
-		# for data in train_loader:  # Iterate in batches over the training dataset.
-		# 	out = model(data.x, data.edge_index, data.batch)  # Perform a single forward pass.
-		# loss = criterion(out, data.y)  # Compute the loss.
-		# loss.backward()  # Derive gradients.
-		# optimizer.step()  # Update parameters based on gradients.
-		# optimizer.zero_grad()  # Clear gradients.
 		########TODO##############
 
 		# x = self.conv(x)
@@ -173,24 +156,6 @@ class anim_MLP(nn.Module):
 	def forward(self, input):
 		return self.fc_layers(input)
 
-
-def get_data(A):
-	'''
-													this function returns edge index and edge attributes sorted in order of occurence from adj matrix A
-													returns
-													- edge_index: tensor with shape [2, M], with M being the number of edges, indicating nonzero entries in the graph adjacency (i.e. edges) (i.e. sparse adjacency)
-					- edge_attr: edge features matrix (sorted by edge apperance in edge_index)
-	'''
-	pass
-
-
-def from_edge_idx(edge_index, edge_attr, batch):
-	'''
-					this function returns A from edge_index and edge_attributes
-	'''
-	return pyg_utils.to_dense_adj(edge_index=edge_index, batch=batch, edge_attr=edge_attr)
-
-
 class anim_conv(nn.Module):
 	def __init__(self, in_channels, out_channels, kernel_size, t_kernel_size=1, t_stride=1, t_padding=0, t_dilation=1, bias=True):
 		super().__init__()
@@ -202,6 +167,7 @@ class anim_conv(nn.Module):
 		self.edge_in_dim1 = 384  # check this
 		self.edge_fc_dims1 = [128]  # check this
 		self.edge_out_dim1 = 64  # check this
+		self.edge_mid = 2*self.edge_out_dim1
 		if(in_channels==4):
 			self.node_in_dim = 24  # check this
 		else: 
@@ -213,46 +179,36 @@ class anim_conv(nn.Module):
 			self.node_out_dim=384
 		self.dropout_p = 0.25  # checkthis
 		self.training = True  # add an option for this
+		
 		self.edge_mlp = anim_MLP(input_dim=self.edge_in_dim, fc_dims=list(self.edge_fc_dims) + [self.edge_out_dim],
 								 dropout_p=self.dropout_p, use_batchnorm=True)
 		self.edge_mlp1 = anim_MLP(input_dim=self.edge_in_dim1, fc_dims=list(self.edge_fc_dims1) + [self.edge_out_dim1],
 								 dropout_p=self.dropout_p, use_batchnorm=True)
 		self.node_mlp = anim_MLP(input_dim=self.node_in_dim, fc_dims=list(self.node_fc_dims) + [self.node_out_dim],
 								 dropout_p=self.dropout_p, use_batchnorm=True)
+		self.edge_update = EdgeUpdate(input_dim=self.edge_out_dim1, fc_dims=list(self.edge_mid) + [self.edge_out_dim1],
+								 dropout_p=self.dropout_p, use_batchnorm=True)	
+
+							 
 		
 		# print(f"inchannels and out channels: {in_channels},{out_channels}")
 		# self.convs = pyg_nn.GatedGraphConv(out_channels=out_channels,num_layers=2)
 		# self.convs = pyg_nn.GatedGraphConv(out_channels=384,num_layers=2)
 		self.convs = GatedGraphConv_parv(out_channels=384,num_layers=2)
-		# self.conv1 = nn.Conv2d(
-		# 	in_channels,
-		# 	out_channels,
-		# 	kernel_size=(t_kernel_size, 1),
-		# 	padding=(t_padding, 0),
-		# 	stride=(t_stride, 1),
-		# 	dilation=(t_dilation, 1),
-		# 	bias=bias)
 
 	def forward(self, data,mask):
-		# data = get_data(A)
 		x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
-		# print(f"shape of node features before {x.shape}")
-		# x=x.reshape(x.shape[0],)
-		# print(f"shape of edge index {edge_index.shape}")
-		# print(f"shape of edge features before {edge_attr.shape}")
 		edge_features = self.edge_mlp(edge_attr)
-		# print(f"shape of edge features after {edge_features.shape}")
+		
 		node_features = self.node_mlp(x)
-		# print(f"shape of node features before conv1 {node_features.shape}")
-		# node_features=self.conv1(node_features)
-		# print(f"shape of node features after conv1 {node_features.shape}")
-		# print(f"shape of node features {node_features.shape}, before {x.shape}")
 		node_features = self.convs(
 			x=node_features, edge_index=edge_index, edge_weight = edge_features)
 		node_features = F.relu(node_features)
 		node_features = F.dropout(
 			node_features, p=self.dropout_p, training=self.training)
+		
 		edge_features = self.edge_mlp1(edge_features)
+		edge_features = self.edge_update.forward(edge_features)
 		# A_new = from_edge_idx(edge_index, edge_features, batch)
 		A_new = pyg_utils.to_dense_adj(
 			edge_index=edge_index, batch=batch, edge_attr=edge_features, max_num_nodes=400)
@@ -265,82 +221,158 @@ class anim_conv(nn.Module):
 
 # possible template for implementing gated graph conv on own###################################################3
 
+class EdgeUpdate():
+	def __init__(self, input_dim, fc_dims, dropout_p=0.4, use_batchnorm=False):
+		""" inputs = [x, edge_weight, edge_index]
+		"""
+		# super().build(input_shape)
+		print(type(fc_dims))
+		self.gather = Gather()
+		self.slice1 = Slice(np.s_[:, :, 1])
+		self.slice0 = Slice(np.s_[:, :, 0])
+		self.concat = ConcatDense(input_dim=input_dim, fc_dims=fc_dims,
+								 dropout_p=dropout_p, use_batchnorm=use_batchnorm)
+
+	def forward(self, x , edge_index ,edge_weight, mask=None):
+		""" Inputs: [x, edge_weight, edge_index]
+			Outputs: edge_weight
+		"""
+
+		# Get nodes at start and end of edge
+		source_node = self.gather([x, self.slice1.call(edge_index)])
+		target_node = self.gather([x, self.slice0.call(edge_index)])
+
+		new_edge_weight = self.concat([edge_weight, source_node, target_node])
+
+		# if self.dropout > 0.:
+		#     new_edge_weight = self.dropout_layer(new_edge_weight)
+
+		return new_edge_weight
+
+class Slice():
+	def __init__(self, slice_obj):
+		# super(Slice, self).__init__(*args, **kwargs)
+		self.slice_obj = slice_obj
+		# self.supports_masking = True
+
+	def call(self, inputs):
+		return inputs[self.slice_obj]
+
+def Gather(inputs):
+	# def call(self, inputs, mask=None):
+	reference, indices = inputs
+	return torch.gather(reference, indices, dim =0)
+
+class ConcatDense(nn.Module):
+	'''
+	code taken from  https://github.com/dvl-tum/mot_neural_solver/blob/master/src/mot_neural_solver/models/mlp.py
+	'''
+
+	def __init__(self, input_dim, fc_dims, dropout_p=0.4, use_batchnorm=False):
+		super(ConcatDense, self).__init__()
+
+		assert isinstance(fc_dims, (list, tuple)), 'fc_dims must be either a list or a tuple, but got {}'.format(
+			type(fc_dims))
+		
+		layers = []
+		for dim in fc_dims:
+			layers.append(nn.Linear(input_dim, dim))
+			if use_batchnorm and dim != 1:
+				layers.append(nn.BatchNorm1d(dim))
+
+			if dim != 1:
+				layers.append(nn.ReLU(inplace=True))
+
+			if dropout_p is not None and dim != 1:
+				layers.append(nn.Dropout(p=dropout_p))
+
+			input_dim = dim
+		
+		self.fc_layers = nn.Sequential(*layers)
+
+	def forward(self, input):
+		input = torch.cat(input, dim=0)
+		return self.fc_layers(input)
 
 class GatedGraphConv_parv(GatedGraphConv):
-	r"""The gated graph convolution operator from the `"Gated Graph Sequence
-	Neural Networks" <https://arxiv.org/abs/1511.05493>`_ paper
-
-	.. math::
-		\mathbf{h}_i^{(0)} &= \mathbf{x}_i \, \Vert \, \mathbf{0}
-
-		\mathbf{m}_i^{(l+1)} &= \sum_{j \in \mathcal{N}(i)} e_{j,i} \cdot
-		\mathbf{\Theta} \cdot \mathbf{h}_j^{(l)}
-
-		\mathbf{h}_i^{(l+1)} &= \textrm{GRU} (\mathbf{m}_i^{(l+1)},
-		\mathbf{h}_i^{(l)})
-
-	up to representation :math:`\mathbf{h}_i^{(L)}`.
-	The number of input channels of :math:`\mathbf{x}_i` needs to be less or
-	equal than :obj:`out_channels`.
-	:math:`e_{j,i}` denotes the edge weight from source node :obj:`j` to target
-	node :obj:`i` (default: :obj:`1`)
-
-	Args:
-		out_channels (int): Size of each input sample.
-		num_layers (int): The sequence length :math:`L`.
-		aggr (string, optional): The aggregation scheme to use
-			(:obj:`"add"`, :obj:`"mean"`, :obj:`"max"`).
-			(default: :obj:`"add"`)
-		bias (bool, optional): If set to :obj:`False`, the layer will not learn
-			an additive bias. (default: :obj:`True`)
-		**kwargs (optional): Additional arguments of
-			:class:`torch_geometric.nn.conv.MessagePassing`.
-	"""
 	def __init__(self, out_channels: int, num_layers: int, aggr: str = 'add',
 				 bias: bool = True, **kwargs):
 		super(GatedGraphConv_parv, self).__init__(out_channels = out_channels, num_layers= num_layers , aggr=aggr, bias= bias, **kwargs)
-
-		# self.out_channels = out_channels
-		# self.num_layers = num_layers
-
-		# self.weight = Param(Tensor(num_layers, out_channels, out_channels))
-		# self.rnn = torch.nn.GRUCell(out_channels, out_channels, bias=bias)
-
-		# self.reset_parameters()
-
-	# def reset_parameters(self):
-	# 	uniform(self.out_channels, self.weight)
-	# 	self.rnn.reset_parameters()
-
-
-	# def forward(self, x: Tensor, edge_index: Adj,
-	# 			edge_weight: OptTensor = None) -> Tensor:
-	# 	""""""
-	# 	if x.size(-1) > self.out_channels:
-	# 		raise ValueError('The number of input channels is not allowed to '
-	# 						 'be larger than the number of output channels')
-
-	# 	if x.size(-1) < self.out_channels:
-	# 		zero = x.new_zeros(x.size(0), self.out_channels - x.size(-1))
-	# 		x = torch.cat([x, zero], dim=1)
-
-	# 	for i in range(self.num_layers):
-	# 		m = torch.matmul(x, self.weight[i])
-	# 		# propagate_type: (x: Tensor, edge_weight: OptTensor)
-	# 		m = self.propagate(edge_index, x=m, edge_weight=edge_weight,
-	# 						   size=None)
-	# 		x = self.rnn(m, x)
-
-	# 	return x
-
-
+	
 	def message(self, x_j: Tensor, edge_weight: OptTensor):
-		# if edge_weight is not None:
-		# 	print("hiiii")
-		# 	print(x_j.shape)
-		# 	print(edge_weight.shape)
-		# return x_j if edge_weight is None else edge_weight.view(-1, 1) * x_j
 		return x_j if edge_weight is None else edge_weight * x_j
+
+# class ConcatDense(layers.Layer):
+# 	""" Layer to combine the concatenation and two dense layers. Just useful as a common operation in the graph
+# 	layers """
+
+# 	def __init__(self, **kwargs):
+# 		super(ConcatDense, self).__init__(**kwargs)
+# 		self.supports_masking = True
+
+# 	def build(self, input_shape):
+# 		num_features = input_shape[0][-1]
+		# self.concat = layers.Concatenate()
+		# self.dense1 = layers.Dense(2 * num_features, activation='relu')
+		# self.dense2 = layers.Dense(num_features)
+
+	# def call(self, inputs, mask=None):
+	# 	output = self.concat(inputs)
+	# 	output = self.dense1(output)
+	# 	output = self.dense2(output)
+	# 	return output
+
+	# def compute_mask(self, inputs, mask=None):
+	# 	if mask is None:
+	# 		return None
+	# 	else:
+	# 		return tf.math.reduce_all(tf.stack(mask), axis=0)
+
+# def get_data(A):
+# 	'''
+# 													this function returns edge index and edge attributes sorted in order of occurence from adj matrix A
+# 													returns
+# 													- edge_index: tensor with shape [2, M], with M being the number of edges, indicating nonzero entries in the graph adjacency (i.e. edges) (i.e. sparse adjacency)
+# 					- edge_attr: edge features matrix (sorted by edge apperance in edge_index)
+# 	'''
+# 	pass
+
+
+# def from_edge_idx(edge_index, edge_attr, batch):
+# 	'''
+# 					this function returns A from edge_index and edge_attributes
+# 	'''
+# 	return pyg_utils.to_dense_adj(edge_index=edge_index, batch=batch, edge_attr=edge_attr)
+
+# class Reduce(layers.Layer):
+# 	def __init__(self, reduction='sum', *args, **kwargs):
+# 		super(Reduce, self).__init__(*args, **kwargs)
+# 		self.reduction = reduction
+
+# 	def _parse_inputs_and_mask(self, inputs, mask=None):
+# 		data, segment_ids, target = inputs
+
+# 		# Handle missing masks
+# 		if mask is not None:
+# 			data_mask = mask[0]
+# 		else:
+# 			data_mask = None
+
+# 		return data, segment_ids, target, data_mask
+
+# 	def call(self, inputs, mask=None):
+# 		data, segment_ids, target, data_mask = self._parse_inputs_and_mask(
+# 			inputs, mask)
+# 		num_segments = tf.shape(target, out_type=segment_ids.dtype)[1]
+# 		return batched_segment_op(
+# 			data,
+# 			segment_ids,
+# 			num_segments,
+# 			data_mask=data_mask,
+# 			reduction=self.reduction)
+
+# 	def get_config(self):
+# 		return {'reduction': self.reduction}
 
 # class GAT(pyg_nn.MessagePassing):
 # 	'''
