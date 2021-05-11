@@ -107,16 +107,16 @@ class ConvTemporalGraphical(nn.Module):
 		########TODO##############
 
 		# x = self.conv(x)
-		print("starting conv2")
+		# print("starting conv2")
 		x, A = self.conv2(data1,mask)  #########CALL TO NEW CONV LAYER
-		print("YESSSS")
-		print(x.shape)
+		# print("YESSSS")
+		# print(x.shape)
 		x=x.reshape(8,x.shape[0]//8,64,6).permute(0,2,3,1)
-		print(x.shape)
+		# print(x.shape)
 		# A is (n,8,v,v)
 		# A = self.adjmatder(A[:, :7])
 		A = A*mask
-		print(A.shape)
+		# print(A.shape)
 		# Dl = ((A.sum(axis=2) + 0.001)**(-1)).float()
 		# Dl is (n,64,v)
 		# A = torch.einsum('ncvw,ncw->ncvw',(A,Dl))
@@ -223,15 +223,15 @@ class anim_conv(nn.Module):
 	def forward(self, data,mask):
 		# data = get_data(A)
 		x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
-		print(f"shape of node features before {x.shape}")
+		# print(f"shape of node features before {x.shape}")
 		# x=x.reshape(x.shape[0],)
 		edge_features = self.edge_mlp(edge_attr)
-		print(f"shape of edge features {edge_features.shape}")
+		# print(f"shape of edge features {edge_features.shape}")
 		node_features = self.node_mlp(x)
 		# print(f"shape of node features before conv1 {node_features.shape}")
 		# node_features=self.conv1(node_features)
 		# print(f"shape of node features after conv1 {node_features.shape}")
-		print(f"shape of node features {node_features.shape}, before {x.shape}")
+		# print(f"shape of node features {node_features.shape}, before {x.shape}")
 		node_features = self.convs(
 			x=node_features, edge_index=edge_index)
 		node_features = F.relu(node_features)
