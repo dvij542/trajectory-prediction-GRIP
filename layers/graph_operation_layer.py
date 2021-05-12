@@ -176,7 +176,7 @@ class anim_conv(nn.Module):
         self.edge_in_dim1 = 384  # check this
         self.edge_fc_dims1 = [128]  # check this
         self.edge_out_dim1 = 64  # check this
-        self.edge_mid = 2*self.edge_out_dim1
+        self.edge_mid = [2*self.edge_out_dim1]
         if(in_channels == 4):
             self.node_in_dim = 24  # check this
         else:
@@ -215,7 +215,7 @@ class anim_conv(nn.Module):
             node_features, p=self.dropout_p, training=self.training)
 
         # edge_features = self.edge_mlp1(edge_features)
-        edge_features = self.edge_update.forward(edge_features)
+        edge_features = self.edge_update(node_features,edge_index,edge_features)
         # A_new = from_edge_idx(edge_index, edge_features, batch)
         A_new = to_dense_adj(
             edge_index=edge_index, batch=batch, edge_attr=edge_features, max_num_nodes=400)
@@ -230,15 +230,16 @@ class anim_conv(nn.Module):
 # possible template for implementing gated graph conv on own###################################################3
 
 
-class EdgeUpdate():
+class EdgeUpdate(nn.Module):
     def __init__(self, input_dim, fc_dims, dropout_p=0.4, use_batchnorm=False):
         """ inputs = [x, edge_weight, edge_index]
         """
+        super().__init__()
         # super().build(input_shape)
         print(type(fc_dims))
-        self.gather = Gather()
-        self.slice1 = Slice(np.s_[:, :, 1])
-        self.slice0 = Slice(np.s_[:, :, 0])
+        self.gather = Gather
+        self.slice1 = Slice(np.s_[ :, 1])
+        self.slice0 = Slice(np.s_[ :, 0])
         self.concat = ConcatDense(input_dim=input_dim, fc_dims=fc_dims,
                                   dropout_p=dropout_p, use_batchnorm=use_batchnorm)
 
@@ -248,8 +249,9 @@ class EdgeUpdate():
         """
 
         # Get nodes at start and end of edge
-        source_node = self.gather([x, self.slice1.call(edge_index)])
-        target_node = self.gather([x, self.slice0.call(edge_index)])
+        print(f"IN ERROR ZONE {x.shape} {self.slice1.call(edge_index)} {self.slice0.call(edge_index)}")
+        source_node = self.gather(x, self.slice1.call(edge_index))
+        target_node = self.gather(x, self.slice0.call(edge_index))
 
         new_edge_weight = self.concat([edge_weight, source_node, target_node])
 
@@ -269,10 +271,10 @@ class Slice():
         return inputs[self.slice_obj]
 
 
-def Gather(inputs):
+def Gather(reference,indices):
     # def call(self, inputs, mask=None):
-    reference, indices = inputs
-    return torch.gather(reference, indices, dim=0)
+    # reference, indices = inputs
+    return torch.gather(reference,0, indices)
 
 
 class ConcatDense(nn.Module):
