@@ -72,6 +72,11 @@ class ConvTemporalGraphical(nn.Module):
 			4) Node MLP post message passing
 			5) Edge MLP post message passing
 		'''
+
+		'''
+			1) import MLP from GCN class
+			2) GATconv with same input and output as Gated-GCN
+		'''
 		m, n = x.shape[0], x.shape[3]
 		x_reshaped = x.reshape(m, -1, n)
 		datalist = []
@@ -98,13 +103,17 @@ class ConvTemporalGraphical(nn.Module):
 
 		# x = self.conv(x)
 		# print("starting conv2")
-		x, A = self.conv2(data1,mask)  #########CALL TO NEW CONV LAYER
+		x, A_ = self.conv2(data1,mask)  #########CALL TO NEW CONV LAYER
+
+		# include GAT with data1 and mask
+
+		
 		# print("YESSSS")
 		# print(x.shape)
 		x=x.reshape(A.shape[0],x.shape[0]//A.shape[0],64,6).permute(0,2,3,1)
 		# print(x.shape)
 		# A is (n,8,v,v)
-		# A = self.adjmatder(A[:, :7])
+		A = self.adjmatder(A[:, :7])
 		A = A*mask
 		# print(A.shape)
 		# Dl = ((A.sum(axis=2) + 0.001)**(-1)).float()
@@ -186,8 +195,8 @@ class anim_conv(nn.Module):
 								 dropout_p=self.dropout_p, use_batchnorm=True)
 		self.node_mlp = anim_MLP(input_dim=self.node_in_dim, fc_dims=list(self.node_fc_dims) + [self.node_out_dim],
 								 dropout_p=self.dropout_p, use_batchnorm=True)
-		self.edge_update = EdgeUpdate(input_dim=self.edge_out_dim1, fc_dims=list(self.edge_mid) + [self.edge_out_dim1],
-								 dropout_p=self.dropout_p, use_batchnorm=True)	
+		# self.edge_update = EdgeUpdate(input_dim=self.edge_out_dim1, fc_dims=list(self.edge_mid) + [self.edge_out_dim1],
+		# 						 dropout_p=self.dropout_p, use_batchnorm=True)	
 
 							 
 		
@@ -208,7 +217,7 @@ class anim_conv(nn.Module):
 			node_features, p=self.dropout_p, training=self.training)
 		
 		edge_features = self.edge_mlp1(edge_features)
-		edge_features = self.edge_update.forward(edge_features)
+		# edge_features = self.edge_update.forward(edge_features)
 		# A_new = from_edge_idx(edge_index, edge_features, batch)
 		A_new = pyg_utils.to_dense_adj(
 			edge_index=edge_index, batch=batch, edge_attr=edge_features, max_num_nodes=400)
