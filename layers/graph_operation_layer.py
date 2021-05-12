@@ -1,14 +1,14 @@
 import torch
 import torch.nn as nn
-import torch_geometric.nn as pyg_nn
+# import torch_geometric.nn as pyg_nn
 import torch.nn.functional as F
-import torch_geometric.utils as pyg_utils
+# import torch_geometric.utils as pyg_utils
 from torch_geometric.data import Data, DataLoader
 
 from torch_geometric.typing import Adj, OptTensor
 from torch import Tensor
-from torch.nn import Parameter as Param
-from torch_sparse import SparseTensor, matmul
+# from torch.nn import Parameter as Param
+# from torch_sparse import SparseTensor, matmul
 from torch_geometric.nn.conv import MessagePassing,GatedGraphConv
 
 import numpy as np
@@ -48,14 +48,14 @@ class ConvTemporalGraphical(nn.Module):
 			nn.Dropout(0.5, inplace=False)
 		)
 		# To increase the no of channels of the graph to out_channels*k
-		self.conv = nn.Conv2d(
-			in_channels,
-			out_channels,
-			kernel_size=(t_kernel_size, 1),
-			padding=(t_padding, 0),
-			stride=(t_stride, 1),
-			dilation=(t_dilation, 1),
-			bias=bias)
+		# self.conv = nn.Conv2d(
+		# 	in_channels,
+		# 	out_channels,
+		# 	kernel_size=(t_kernel_size, 1),
+		# 	padding=(t_padding, 0),
+		# 	stride=(t_stride, 1),
+		# 	dilation=(t_dilation, 1),
+		# 	bias=bias)
 
 		self.conv2 = anim_conv(in_channels, out_channels, kernel_size)
 
@@ -95,15 +95,15 @@ class ConvTemporalGraphical(nn.Module):
 		train_loader = DataLoader(
 			datalist, batch_size=x.shape[0], shuffle=True)
 		data1 = next(iter(train_loader)).to("cuda:0")
-		new_a = pyg_utils.to_dense_adj(
-			edge_index=data1.edge_index, batch=data1.batch, edge_attr=data1.edge_attr, max_num_nodes=400)
-		new_a = new_a.permute(0, 3, 1, 2).to('cuda:0')
-		new_a = torch.cat((new_a, mask), 1)
+		# new_a = pyg_utils.to_dense_adj(
+		# 	edge_index=data1.edge_index, batch=data1.batch, edge_attr=data1.edge_attr, max_num_nodes=400)
+		# new_a = new_a.permute(0, 3, 1, 2).to('cuda:0')
+		# new_a = torch.cat((new_a, mask), 1)
 		########TODO##############
 
 		# x = self.conv(x)
 		# print("starting conv2")
-		x, A_ = self.conv2(data1,mask)  #########CALL TO NEW CONV LAYER
+		x = self.conv2(data1,mask)  #########CALL TO NEW CONV LAYER
 
 		# include GAT with data1 and mask
 
@@ -191,8 +191,8 @@ class anim_conv(nn.Module):
 		
 		self.edge_mlp = anim_MLP(input_dim=self.edge_in_dim, fc_dims=list(self.edge_fc_dims) + [self.edge_out_dim],
 								 dropout_p=self.dropout_p, use_batchnorm=True)
-		self.edge_mlp1 = anim_MLP(input_dim=self.edge_in_dim1, fc_dims=list(self.edge_fc_dims1) + [self.edge_out_dim1],
-								 dropout_p=self.dropout_p, use_batchnorm=True)
+		# self.edge_mlp1 = anim_MLP(input_dim=self.edge_in_dim1, fc_dims=list(self.edge_fc_dims1) + [self.edge_out_dim1],
+		# 						 dropout_p=self.dropout_p, use_batchnorm=True)
 		self.node_mlp = anim_MLP(input_dim=self.node_in_dim, fc_dims=list(self.node_fc_dims) + [self.node_out_dim],
 								 dropout_p=self.dropout_p, use_batchnorm=True)
 		# self.edge_update = EdgeUpdate(input_dim=self.edge_out_dim1, fc_dims=list(self.edge_mid) + [self.edge_out_dim1],
@@ -216,16 +216,17 @@ class anim_conv(nn.Module):
 		node_features = F.dropout(
 			node_features, p=self.dropout_p, training=self.training)
 		
-		edge_features = self.edge_mlp1(edge_features)
-		# edge_features = self.edge_update.forward(edge_features)
-		# A_new = from_edge_idx(edge_index, edge_features, batch)
-		A_new = pyg_utils.to_dense_adj(
-			edge_index=edge_index, batch=batch, edge_attr=edge_features, max_num_nodes=400)
-		A_new = A_new.permute(0, 3, 1, 2).to('cuda:0')
+		# edge_features = self.edge_mlp1(edge_features)
+		# # edge_features = self.edge_update.forward(edge_features)
+		# # A_new = from_edge_idx(edge_index, edge_features, batch)
+		# A_new = pyg_utils.to_dense_adj(
+		# 	edge_index=edge_index, batch=batch, edge_attr=edge_features, max_num_nodes=400)
+		# A_new = A_new.permute(0, 3, 1, 2).to('cuda:0')
 		# A_new = A_new * mask
 		# A_new = torch.cat((A_new, mask), 1)
 		# print(node_features.shape,A_new.shape)
-		return node_features,A_new
+		# return node_features,A_new
+		return node_features
 		####################
 
 # possible template for implementing gated graph conv on own###################################################3
