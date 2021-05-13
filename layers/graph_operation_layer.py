@@ -61,7 +61,7 @@ class ConvTemporalGraphical(nn.Module):
     def forward(self, x, A):
         assert A.size(1) == self.kernel_size
         # A is (n,8,v,v)
-        mask = A[:, 7:]
+        mask = A[:, -1:]
 
         ########TODO##############
         '''
@@ -80,6 +80,7 @@ class ConvTemporalGraphical(nn.Module):
         x_reshaped = x.reshape(m, -1, n)
         datalist = []
         for i in range(A.shape[0]):
+            print(f"{mask[i].shape}")
             hello = torch.reshape(mask[i], (400, 400))
             index = torch.nonzero(hello, as_tuple=True)
             index = torch.vstack(index).detach().cpu()
@@ -102,13 +103,13 @@ class ConvTemporalGraphical(nn.Module):
 
         # x = self.conv(x)
         # print("starting conv2")
-        x = self.conv2(data1, mask)  # CALL TO NEW CONV LAYER
+        x, A = self.conv2(data1, mask)  # CALL TO NEW CONV LAYER
 
         # include GAT with data1 and mask
 
         # print("YESSSS")
         # print(x.shape)
-        x, A = x.reshape(A.shape[0], x.shape[0] //
+        x= x.reshape(A.shape[0], x.shape[0] //
                          A.shape[0], 64, 6).permute(0, 2, 3, 1)
         # print(x.shape)
         # A is (n,8,v,v)
@@ -171,12 +172,13 @@ class anim_conv(nn.Module):
         self.kernel_size = kernel_size
 
         self.edge_in_dim = 7  # check this
-        self.edge_fc_dims = [500, 1000]  # check this
+        self.edge_fc_dims = [256, 512]  # check this
         self.edge_out_dim = 384  # check this
         self.edge_in_dim1 = 384  # check this
-        self.edge_fc_dims1 = [128]  # check this
-        self.edge_out_dim1 = 64  # check this
-        self.edge_mid = [2*self.edge_out_dim1]
+        self.edge_fc_dims1 = [512,256]  # check this
+        self.edge_out_dim1 = 63  # check this
+        self.edge_mid = [512]
+        self.edge_update_in = 3*384
         if(in_channels == 4):
             self.node_in_dim = 24  # check this
         else:
@@ -191,11 +193,11 @@ class anim_conv(nn.Module):
 
         self.edge_mlp = anim_MLP(input_dim=self.edge_in_dim, fc_dims=list(self.edge_fc_dims) + [self.edge_out_dim],
                                  dropout_p=self.dropout_p, use_batchnorm=True)
-        # self.edge_mlp1 = anim_MLP(input_dim=self.edge_in_dim1, fc_dims=list(self.edge_fc_dims1) + [self.edge_out_dim1],
-        # 						 dropout_p=self.dropout_p, use_batchnorm=True)
+        self.edge_mlp1 = anim_MLP(input_dim=self.edge_in_dim1, fc_dims=list(self.edge_fc_dims1) + [self.edge_out_dim1],
+        						 dropout_p=self.dropout_p, use_batchnorm=True)
         self.node_mlp = anim_MLP(input_dim=self.node_in_dim, fc_dims=list(self.node_fc_dims) + [self.node_out_dim],
                                  dropout_p=self.dropout_p, use_batchnorm=True)
-        self.edge_update = EdgeUpdate(input_dim=self.edge_out_dim1, fc_dims=list(self.edge_mid) + [self.edge_out_dim1],
+        self.edge_update = EdgeUpdate(input_dim=self.edge_update_in, fc_dims=list(self.edge_mid) + [self.edge_out_dim],
                                       dropout_p=self.dropout_p, use_batchnorm=True)
 
         # print(f"inchannels and out channels: {in_channels},{out_channels}")
@@ -216,11 +218,12 @@ class anim_conv(nn.Module):
 
         # edge_features = self.edge_mlp1(edge_features)
         edge_features = self.edge_update(node_features,edge_index,edge_features)
+        edge_features = self.edge_mlp1(edge_features)
         # A_new = from_edge_idx(edge_index, edge_features, batch)
         A_new = to_dense_adj(
             edge_index=edge_index, batch=batch, edge_attr=edge_features, max_num_nodes=400)
         A_new = A_new.permute(0, 3, 1, 2).to('cuda:0')
-        A_new = A_new * mask
+        # A_new = A_new * mask
         A_new = torch.cat((A_new, mask), 1)
         # print(node_features.shape,A_new.shape)
         return node_features, A_new
@@ -238,8 +241,8 @@ class EdgeUpdate(nn.Module):
         # super().build(input_shape)
         print(type(fc_dims))
         self.gather = Gather
-        self.slice1 = Slice(np.s_[ :, 1])
-        self.slice0 = Slice(np.s_[ :, 0])
+        self.slice1 = Slice(np.s_[1, :])
+        self.slice0 = Slice(np.s_[0, :])
         self.concat = ConcatDense(input_dim=input_dim, fc_dims=fc_dims,
                                   dropout_p=dropout_p, use_batchnorm=use_batchnorm)
 
@@ -249,9 +252,19 @@ class EdgeUpdate(nn.Module):
         """
 
         # Get nodes at start and end of edge
-        print(f"IN ERROR ZONE {x.shape} {self.slice1.call(edge_index)} {self.slice0.call(edge_index)}")
-        source_node = self.gather(x, self.slice1.call(edge_index))
-        target_node = self.gather(x, self.slice0.call(edge_index))
+        print(f"IN ERROR ZONE {edge_index.shape}")
+        # source_edge_index = self.slice0.call(edge_index).transpose(0,1)
+        # source_node = self.gather(x, self.slice0.call(edge_index))
+        # source_node = x[source_edge_index]
+        edge_index_T = edge_index.permute(1,0)
+        x_numpy = x.detach().cpu().numpy()
+        source_node=torch.tensor([x_numpy[y[0]] for y in edge_index_T]).to('cuda:0')
+        # edge_attr = torch.tensor(
+        #         [Ab[i, :7, index[0][m], index[1][m]] for m in range(index.shape[1])])
+        target_node=torch.tensor([x_numpy[y[1]] for y in edge_index_T]).to('cuda:0')
+        print(f"IN TESTING ZONE {source_node.shape} {target_node.shape}")
+
+        # target_node = self.gather(x, self.slice1.call(edge_index))
 
         new_edge_weight = self.concat([edge_weight, source_node, target_node])
 
@@ -305,7 +318,11 @@ class ConcatDense(nn.Module):
         self.fc_layers = nn.Sequential(*layers)
 
     def forward(self, input):
-        input = torch.cat(input, dim=0)
+        print(f"IN TESTING ZONE {input[0].shape} {input[1].shape} {input[2].shape}")
+
+        input = torch.cat(input, dim=1)
+        print(f"IN TESTING ZONE {input.shape}")
+
         return self.fc_layers(input)
 
 
