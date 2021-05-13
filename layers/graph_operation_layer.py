@@ -6,7 +6,7 @@ import os
 CUDA_VISIBLE_DEVICES='0'
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA_VISIBLE_DEVICES
 dev = 'cuda:0'
-CUDA_LAUNCH_BLOCKING=1
+#CUDA_LAUNCH_BLOCKING=1
 
 
 class ConvTemporalGraphical(nn.Module):
@@ -74,19 +74,20 @@ class ConvTemporalGraphical(nn.Module):
 	def forward(self, x, A):
 		assert A.size(1) == self.kernel_size
 		x = self.conv(x)
+		x_y = x.clone()
 		mask = A[:,7:]
 		#print(mask.shape)
 
 		#A = self.adjmatder(A[:,:7])
 		A = A[:,:7]
-		x1 = x.permute(0,3,1,2)
+		x1 = x_y.permute(0,3,1,2).clone()
 		#print(x1.shape)
 		n, v, c, t = x1.size()
-		x1 = x1.reshape(n*v*c,t)
-		x1 = x1.to(dev)
+		x8 = x1.reshape(n*v*c,t).clone()
+		x8 = x8.to(dev)
 		#print(x1.shape)
-		x1 = self.l2(x1)
-		x1 = x1.reshape(n,v,c)
+		x9 = self.l2(x8)
+		x10 = x9.reshape(n,v,c).clone()
 		#x1 = self.l1(x1)
 		#x1 = x1.reshape(n, v, 7)s
 		#A = A.permute(0,2,3,1)
@@ -97,39 +98,39 @@ class ConvTemporalGraphical(nn.Module):
 		x2 = x2.to(dev)
 		x3 = x3.to(dev)
 		for i in range(0, v):
-			x2[: ,: ,i, :] = x1
-			x3[: ,i ,:, :] = x1
-		x3 = torch.cat((x2,x3),dim=-1)
-		x3 = x3.reshape(n*v*v,128)
+			x2[: ,: ,i, :] = x10.clone()
+			x3[: ,i ,:, :] = x10.clone()
+		x4 = torch.cat((x2,x3),dim=-1)
+		x5 = x4.reshape(n*v*v,128).clone()
 		#print(x3.shape)
-		x3 = x3.float().to(dev)
-		x3 = self.l1(x3)
-		A1 = self.relu(x3)
+		x6 = x5.float().to(dev)
+		x7 = self.l1(x6)
+		A1 = self.relu(x7)
 		#print(A1)
-		A1 = A1.reshape(n,v,v,1)
-		mask = mask.permute(0,2,3,1)
-		mask = mask.long()
+		A2 = A1.reshape(n,v,v,1).clone()
+		mask1 = mask.permute(0,2,3,1).clone()
+		mask2 = mask1.long()
 		#mask = mask.reshape(n,v,v)
 		#A1 = A1.reshape(n,v,v)
-		print(mask.shape)
-		print(A1.shape)
+		#print(mask2.shape)
+		#print(A2.shape)
 		#print(A1)
-		A1[mask==0] = float('-inf')
+		A2[mask2==0] = float(-1000)
 		#print(mask[1,: ,:])
 		#print(A1[1,:,:])
 		    
 		    
-		A1 = A1.reshape(n,v,v)
+		A3 = A2.reshape(n,v,v).clone()
 		#for i in range(0, n):
 			
-		A1 = self.softmax(A1)
+		A4 = self.softmax(A3)
 		#p = A1
-		A1[A1!=A1] = 0
-		print(A1)
+		#A4[A4!=A4] = 0
+		#print(A4)
 		#print(A1)
-		A1 = A1.reshape(n,v,v,1)
-		A1 = A1.permute(0,3,1,2)
-		n, d, a, b = A1.size()
+		A5 = A4.reshape(n,v,v,1).clone()
+		A6 = A5.permute(0,3,1,2).clone()
+		n, d, a, b = A6.size()
 
 
 		#A = A.reshape(n,v,v,7)
@@ -153,11 +154,13 @@ class ConvTemporalGraphical(nn.Module):
 		# Matrix multiplication followed by addition of all individual kernel matrices
 		#print(x.shape)
 		#print(A.shape)
-		x = torch.einsum('nctv,ndvw->nctw', (x, A1))
+		x_y1 = torch.einsum('nctv,ndvw->ncdtw', (x_y.clone(), A6.clone())).clone()
+		x = x_y1.clone().reshape(n,c,t,v)
 		#A1 = A1.detach()
 		print(x.shape)
 		#print(x)
 
-		return x.contiguous(), A1
+		return x.contiguous(), A6
+
 
 
