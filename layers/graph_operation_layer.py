@@ -55,7 +55,6 @@ class ConvTemporalGraphical(nn.Module):
         # 	stride=(t_stride, 1),
         # 	dilation=(t_dilation, 1),
         # 	bias=bias)
-
         self.conv2 = anim_conv(in_channels, out_channels, kernel_size)
 
     def forward(self, x, A):
@@ -109,8 +108,8 @@ class ConvTemporalGraphical(nn.Module):
 
         # print("YESSSS")
         # print(x.shape)
-        x= x.reshape(A.shape[0], x.shape[0] //
-                         A.shape[0], 64, 6).permute(0, 2, 3, 1)
+        x = x.reshape(A.shape[0], x.shape[0] //
+                      A.shape[0], 64, 6).permute(0, 2, 3, 1)
         # print(x.shape)
         # A is (n,8,v,v)
         # A = self.adjmatder(A[:, :7])
@@ -170,31 +169,32 @@ class anim_conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, t_kernel_size=1, t_stride=1, t_padding=0, t_dilation=1, bias=True):
         super().__init__()
         self.kernel_size = kernel_size
-
+        self.in_channels=in_channels
+        self.out_channels=out_channels
         self.edge_in_dim = 7  # check this
         self.edge_fc_dims = [256, 512]  # check this
         self.edge_out_dim = 384  # check this
         self.edge_in_dim1 = 384  # check this
-        self.edge_fc_dims1 = [512,256]  # check this
+        self.edge_fc_dims1 = [512, 256]  # check this
         self.edge_out_dim1 = 63  # check this
         self.edge_mid = [512]
         self.edge_update_in = 3*384
-        if(in_channels == 4):
-            self.node_in_dim = 24  # check this
-        else:
-            self.node_in_dim = 384
+        # if(in_channels == 4):
+        # self.node_in_dim = 24  # check this
+        # else:
+        self.node_in_dim = 384
         self.node_fc_dims = [256, 512]  # check this
-        if(in_channels == 4):
-            self.node_out_dim = 24  # check this
-        else:
-            self.node_out_dim = 384
+        # if(in_channels == 4):
+        # self.node_out_dim = 24  # check this
+        # else:
+        self.node_out_dim = 384
         self.dropout_p = 0.5  # checkthis
         self.training = True  # add an option for this
 
         self.edge_mlp = anim_MLP(input_dim=self.edge_in_dim, fc_dims=list(self.edge_fc_dims) + [self.edge_out_dim],
                                  dropout_p=self.dropout_p, use_batchnorm=True)
         self.edge_mlp1 = anim_MLP(input_dim=self.edge_in_dim1, fc_dims=list(self.edge_fc_dims1) + [self.edge_out_dim1],
-        						 dropout_p=self.dropout_p, use_batchnorm=True)
+                                  dropout_p=self.dropout_p, use_batchnorm=True)
         self.node_mlp = anim_MLP(input_dim=self.node_in_dim, fc_dims=list(self.node_fc_dims) + [self.node_out_dim],
                                  dropout_p=self.dropout_p, use_batchnorm=True)
         self.edge_update = EdgeUpdate(input_dim=self.edge_update_in, fc_dims=list(self.edge_mid) + [self.edge_out_dim],
@@ -204,11 +204,14 @@ class anim_conv(nn.Module):
         # self.convs = pyg_nn.GatedGraphConv(out_channels=out_channels,num_layers=2)
         # self.convs = pyg_nn.GatedGraphConv(out_channels=384,num_layers=2)
         self.convs_n = GatedGraphConv_parv(out_channels=384, num_layers=2)
+        self.raw_to_proc = anim_MLP(input_dim=4, fc_dims=list(
+            [24, 384])+[384], dropout_p=self.dropout_p, use_batchnorm=True)
 
     def forward(self, data, mask):
         x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
-
         edge_features = self.edge_mlp(edge_attr)
+        if(self.in_channels==4):
+            x=self.raw_to_proc(x)
         node_features = self.node_mlp(x)
         node_features = self.convs_n(
             x=node_features, edge_index=edge_index, edge_weight=edge_features)
@@ -217,7 +220,8 @@ class anim_conv(nn.Module):
             node_features, p=self.dropout_p, training=self.training)
 
         # edge_features = self.edge_mlp1(edge_features)
-        edge_features = self.edge_update(node_features,edge_index,edge_features)
+        edge_features = self.edge_update(
+            node_features, edge_index, edge_features)
         edge_features = self.edge_mlp1(edge_features)
         # A_new = from_edge_idx(edge_index, edge_features, batch)
         A_new = to_dense_adj(
@@ -256,12 +260,14 @@ class EdgeUpdate(nn.Module):
         # source_edge_index = self.slice0.call(edge_index).transpose(0,1)
         # source_node = self.gather(x, self.slice0.call(edge_index))
         # source_node = x[source_edge_index]
-        edge_index_T = edge_index.permute(1,0)
+        edge_index_T = edge_index.permute(1, 0)
         x_numpy = x.detach().cpu().numpy()
-        source_node=torch.tensor([x_numpy[y[0]] for y in edge_index_T]).to('cuda:0')
+        source_node = torch.tensor([x_numpy[y[0]]
+                                   for y in edge_index_T]).to('cuda:0')
         # edge_attr = torch.tensor(
         #         [Ab[i, :7, index[0][m], index[1][m]] for m in range(index.shape[1])])
-        target_node=torch.tensor([x_numpy[y[1]] for y in edge_index_T]).to('cuda:0')
+        target_node = torch.tensor([x_numpy[y[1]]
+                                   for y in edge_index_T]).to('cuda:0')
         print(f"IN TESTING ZONE {source_node.shape} {target_node.shape}")
 
         # target_node = self.gather(x, self.slice1.call(edge_index))
@@ -284,10 +290,10 @@ class Slice():
         return inputs[self.slice_obj]
 
 
-def Gather(reference,indices):
+def Gather(reference, indices):
     # def call(self, inputs, mask=None):
     # reference, indices = inputs
-    return torch.gather(reference,0, indices)
+    return torch.gather(reference, 0, indices)
 
 
 class ConcatDense(nn.Module):
@@ -318,7 +324,8 @@ class ConcatDense(nn.Module):
         self.fc_layers = nn.Sequential(*layers)
 
     def forward(self, input):
-        print(f"IN TESTING ZONE {input[0].shape} {input[1].shape} {input[2].shape}")
+        print(
+            f"IN TESTING ZONE {input[0].shape} {input[1].shape} {input[2].shape}")
 
         input = torch.cat(input, dim=1)
         print(f"IN TESTING ZONE {input.shape}")
