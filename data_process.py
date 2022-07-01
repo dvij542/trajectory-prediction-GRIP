@@ -36,7 +36,7 @@ def get_frame_instance_dict(pra_file_path):
 		content = np.array([x.strip().split(' ') for x in reader.readlines()]).astype(float)
 		now_dict = {}
 		for row in content:
-			# instance = {row[1]:row[2:]}
+			# instance ={row[1]:row[2:]}
 			n_dict = now_dict.get(row[0], {})
 			n_dict[row[1]] = row#[2:]
 			# n_dict.append(instance)
